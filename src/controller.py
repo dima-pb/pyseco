@@ -141,9 +141,34 @@ class TMController:
     return self.client.send(chat)
   #
   
+  def get_current_challenge_info(self):
+    info = messages.GetCurrentChallengeInfo()
+    return self.client.send(info)
+  #
+  
+  def choose_next_challenge(self, filename):
+    map = messages.ChooseNextChallenge(filename)
+    return self.client.send(map)
+  #
+  
+  def next_challenge(self):
+    next = messages.NextChallenge()
+    return self.client.send(next)
+  #
+  
   def chat_send_server_message(self, content):
     chat = messages.ChatSendServerMessage(content)
     return self.client.send(chat)
+  #
+  
+  def call_vote(self, cmd):
+    vote = messages.CallVote(cmd)
+    return self.client.send(vote)
+  #
+  
+  def current_vote_info(self):
+    info = messages.GetCurrentCallVote()
+    return self.client.send(info)
   #
 #
 

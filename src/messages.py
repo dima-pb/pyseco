@@ -6,6 +6,10 @@ def deserialize(msg):
   return xmlrpc.client.loads(msg)
 #
 
+def serialize(params, method):
+  return xmlrpc.client.dumps(params, method)
+#
+
 class Message:
   def __init__(self):
     self.method = None
@@ -13,13 +17,10 @@ class Message:
   #
   
   def serialize(self, req_handle):
-    xml = xmlrpc.client.dumps(self.params, self.method).encode('utf-8')
+    xml = serialize(self.params, self.method)
     size = len(xml).to_bytes(4, 'little')
-    
     req_bytes = req_handle.to_bytes(4, 'little')
-    
-    content = b''.join([size, req_bytes, xml])
-    return content
+    return b''.join([size, req_bytes, xml.encode('utf-8')])
   #
   
   def parse_response(self, msg):
@@ -29,10 +30,10 @@ class Message:
   def parse_response_bool(self, msg):
     object = deserialize(msg)
     if type(object) is not tuple or len(object) == 0:
-      raise Exception('Invalid response to login-request')
+      raise Exception('Invalid response')
     #
     if type(object[0]) is not tuple or len(object[0]) == 0:
-      raise Exception('Invalid response to login-request')
+      raise Exception('Invalid response')
     #
     return object[0][0]
   #
@@ -92,10 +93,87 @@ class ChatSend(Message):
   #
 #
 
+class GetCurrentChallengeInfo(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'GetCurrentChallengeInfo'
+  #
+  
+  def parse_response(self, response):
+    object = deserialize(response)
+    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not dict:
+      raise Exception('Invalid response to GetCurrentChallengeInfo request')
+    #
+    
+    return object[0][0]
+  #
+#
+
+class NextChallenge(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'NextChallenge'
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
+
+class ChooseNextChallenge(Message):
+  def __init__(self, filename):
+    super().__init__()
+    self.method = 'ChooseNextChallenge'
+    self.params = (filename,)
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
+
 class ChatSendServerMessage(ChatSend):
   def __init__(self, content):
     super().__init__(content)
     self.method = 'ChatSendServerMessage'
+  #
+#
+
+class Echo(Message):
+  def __init__(self, internal, external):
+    super().__init__()
+    self.method = 'Echo'
+    # internal <-> external - listed wrong in the documentation
+    self.params = (external, internal)
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
+
+class CallVote(Message):
+  def __init__(self, command):
+    super().__init__()
+    self.method = 'CallVote'
+    command_str = serialize(command.params, command.method)
+    
+    self.params = (command_str,)
+  #
+
+  def parse_response(self, response):
+    return deserialize(response)
+  #
+#
+
+class GetCurrentCallVote(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'GetCurrentCallVote'
+  #
+  
+  def parse_response(self, response):
+    return deserialize(response)
   #
 #
 
