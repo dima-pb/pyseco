@@ -3,7 +3,11 @@ import xmlrpc.client
 
 
 def deserialize(msg):
-  return xmlrpc.client.loads(msg)
+  try:
+    return xmlrpc.client.loads(msg)
+  except Exception as exc:
+    return exc
+  #
 #
 
 def serialize(params, method):
@@ -156,13 +160,21 @@ class CallVote(Message):
   def __init__(self, command):
     super().__init__()
     self.method = 'CallVote'
-    command_str = serialize(command.params, command.method)
+    self.command_str = serialize(command.params, command.method)
     
-    self.params = (command_str,)
+    self.params = (self.command_str,)
   #
 
   def parse_response(self, response):
     return deserialize(response)
+  #
+#
+
+class CallVoteEx(CallVote):
+  def __init__(self, command, ratio, timeout, voter):
+    super().__init__(command)
+    self.method = 'CallVoteEx'
+    self.params = (self.command_str, ratio, timeout, voter)
   #
 #
 

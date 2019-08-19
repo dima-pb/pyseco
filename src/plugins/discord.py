@@ -45,6 +45,8 @@ class Discord(Plugin):
         self.bot_token = kv[1].strip()
       if kv[0] == 'channel_id':
         self.channel_id = int(kv[1].strip())
+      if kv[0] == 'dc_server_invite':
+        self.invite = kv[1].strip()
       #
     #
     if self.bot_token is None or self.channel_id is None:
@@ -75,7 +77,7 @@ class Discord(Plugin):
   def tick(self, params):
     while not self.client.messages.empty():
       msg = self.client.messages.get()
-      self.controller.chat_send_server_message(msg[0] + '@discord: $fe1' + msg[1])
+      self.controller.chat_send_server_message(msg[0] + '@$l[' + self.invite + ']discord$: $z$fe1' + msg[1])
     #
   #
 #

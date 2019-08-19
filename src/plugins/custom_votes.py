@@ -1,4 +1,5 @@
 import time
+import os
 
 from plugins.plugin import Plugin
 import messages
@@ -12,6 +13,24 @@ class CustomVote(Plugin):
     super().__init__(controller)
     self.controller.register_event('TrackMania.PlayerChat', self.check_command)
     self.controller.register_event('TrackMania.Echo', self.echo)
+    self.read_settings()
+  #
+  
+  def read_settings(self):
+    cfg = open(os.path.join('plugins', 'custom_votes.ini'), 'r')
+    self.timeout = 30000
+    self.ratio = 0.5
+    for line in cfg:
+      kv = line.split('=')
+      if len(kv) != 2:
+        continue
+      #
+      if kv[0] == 'timeout':
+        self.timeout = int(kv[1].strip())
+      if kv[0] == 'ratio':
+        self.ratio = float(kv[1].strip())
+      #
+    #
   #
 
   def check_command(self, params):
@@ -30,9 +49,8 @@ class CustomVote(Plugin):
     elif msg == self.SKIP:
       cmd = messages.Echo(self.SKIP, 'Skip this map')
     #
-    
     if cmd is not None:
-      self.controller.call_vote(cmd)
+      print(self.controller.call_vote_ex(cmd, self.ratio, self.timeout, 1))
     #
   #
   

@@ -166,6 +166,11 @@ class TMController:
     return self.client.send(vote)
   #
   
+  def call_vote_ex(self, cmd, ratio, timeout, voter):
+    vote = messages.CallVoteEx(cmd, ratio, timeout, voter)
+    return self.client.send(vote)
+  #
+  
   def current_vote_info(self):
     info = messages.GetCurrentCallVote()
     return self.client.send(info)
