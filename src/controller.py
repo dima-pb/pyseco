@@ -18,7 +18,6 @@ class TMController:
     self.password = config.PASSWORD_SUPERADMIN
     self.players = {} # login-string -> player object
     self.events = {} # string -> list of receiver-callbacks
-    self.plugins = Plugins(self)
     
     self.register_event('TrackMania.PlayerConnect', self.player_connect)
     self.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
@@ -28,6 +27,7 @@ class TMController:
   def run(self):
     self.client.connect()
     self.authenticate(self.username, self.password)
+    self.plugins = Plugins(self)
     
     delay = 0.25
     prev_tick = time.time()
@@ -174,6 +174,26 @@ class TMController:
   def current_vote_info(self):
     info = messages.GetCurrentCallVote()
     return self.client.send(info)
+  #
+  
+  def set_callvote_timeout(self, val):
+    timeout = messages.SetCallVoteTimeOut(val)
+    return self.client.send(timeout)
+  #
+  
+  def set_callvote_ratio(self, val):
+    ratio = messages.SetCallVoteRatio(val)
+    return self.client.send(ratio)
+  #
+  
+  def set_callvote_ratios(self, tuple):
+    ratios = messages.SetCallVoteRatios(tuple)
+    return self.client.send(ratios)
+  #
+  
+  def cancel_vote(self):
+    cancel = messages.CancelVote()
+    return self.client.send(cancel)
   #
 #
 

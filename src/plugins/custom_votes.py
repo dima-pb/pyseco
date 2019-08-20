@@ -11,9 +11,16 @@ class CustomVote(Plugin):
 
   def __init__(self, controller):
     super().__init__(controller)
+    
+    self.read_settings()
+    self.controller.set_callvote_timeout(self.timeout)
+    self.controller.set_callvote_ratios((
+      { 'Command': 'ChallengeRestart', 'Ratio': -1.0 },
+      { 'Command': 'NextChallenge', 'Ratio': -1.0 },
+    ))
+    
     self.controller.register_event('TrackMania.PlayerChat', self.check_command)
     self.controller.register_event('TrackMania.Echo', self.echo)
-    self.read_settings()
   #
   
   def read_settings(self):

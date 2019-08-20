@@ -27,8 +27,8 @@ class TMClient:
     #
     
     cb_enable = messages.EnableCallbacks()
-    if self.send(cb_enable):
-      print('Callbacks enabled')
+    if not self.send(cb_enable):
+      raise Exception('Unable to enable callbacks')
     #
   #
   

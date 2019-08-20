@@ -189,3 +189,50 @@ class GetCurrentCallVote(Message):
   #
 #
 
+class SetCallVoteTimeOut(Message):
+  def __init__(self, val):
+    super().__init__()
+    self.method = 'SetCallVoteTimeOut'
+    self.params = (val,)
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
+
+class SetCallVoteRatio(Message):
+  def __init__(self, val):
+    super().__init__()
+    self.method = 'SetCallVoteRatio'
+    self.params = (val,)
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
+
+class SetCallVoteRatios(Message):
+  def __init__(self, ratios):
+    super().__init__()
+    self.method = 'SetCallVoteRatios'
+    self.params = (ratios,)
+  #
+  
+  def parse_response(self, response):
+    print(str(response))
+    return self.parse_response_bool(response)
+  #
+#
+
+class CancelVote(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'CancelVote'
+  #
+  
+  def parse_response(self, response):
+    return self.parse_response_bool(response)
+  #
+#
