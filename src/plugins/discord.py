@@ -22,7 +22,10 @@ class Discord(Plugin):
     thread.daemon = True
     thread.start()
     
-    self.controller.register_event('TrackMania.PlayerChat', self.post_to_dc)
+    self.controller.register_event('TrackMania.PlayerChat', self.chat_to_dc)
+    self.controller.register_event('TrackMania.PlayerConnect', self.player_connect)
+    self.controller.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
+    self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
     self.controller.register_event('tick', self.tick)
   #
   
@@ -54,13 +57,17 @@ class Discord(Plugin):
     #
   #
 
-  def post_to_dc(self, params):
+  def chat_to_dc(self, params):
     if params[0] == 0:
       return
     #
     
     login = params[1]
     player = self.controller.get_player_by_login(login)
+    if player is None:
+      return
+    #
+    
     nickname_clean = utilities.strip_colors(player.nickname)
     if nickname_clean is None:
       nickname_clean = ''
@@ -69,15 +76,44 @@ class Discord(Plugin):
     msg = nickname_clean + '[' + login + '] : ' + params[2]
     print(msg)
     
-    if self.client.channel is not None:
-      asyncio.run_coroutine_threadsafe(self.client.channel.send(msg), self.loop)
+    self.send_string_to_dc(msg)
+  #
+  
+  def player_connect(self, params):
+    player = self.controller.get_player_by_login(params[0])
+    if player is None:
+      return
+    #
     
+    nickname_clean = utilities.strip_colors(player.nickname)
+    msg = nickname_clean + '[' + player.login + '] connected. (' + str(len(self.controller.players)) + ' online)'
+    self.send_string_to_dc(msg)
+  #
+  
+  def player_disconnect(self, params):
+    login = params[0]
+    msg = login + ' disconnected. (' + str(len(self.controller.players)) + ' online)'
+    self.send_string_to_dc(msg)
+  #
+  
+  def new_challenge(self, params):
+    map = params[0]
+    mapname_clean = utilities.strip_colors(map['Name'])
+    msg = 'Switching to map ' + mapname_clean + ' by ' + map['Author']
+    self.send_string_to_dc(msg)
   #
   
   def tick(self, params):
     while not self.client.messages.empty():
       msg = self.client.messages.get()
       self.controller.chat_send_server_message(msg[0] + '@$l[' + self.invite + ']discord$: $z$fe1' + msg[1])
+    #
+  #
+  
+  
+  def send_string_to_dc(self, string):
+    if self.client.channel is not None:
+      asyncio.run_coroutine_threadsafe(self.client.channel.send(string), self.loop)
     #
   #
 #

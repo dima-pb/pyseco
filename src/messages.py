@@ -221,7 +221,6 @@ class SetCallVoteRatios(Message):
   #
   
   def parse_response(self, response):
-    print(str(response))
     return self.parse_response_bool(response)
   #
 #
@@ -234,5 +233,40 @@ class CancelVote(Message):
   
   def parse_response(self, response):
     return self.parse_response_bool(response)
+  #
+#
+
+class GetPlayerInfo(Message):
+  def __init__(self, login):
+    super().__init__()
+    self.method = 'GetPlayerInfo'
+    self.params = (login, 1)
+  #
+  
+  def parse_response(self, response):
+    object = deserialize(response)
+    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not dict:
+      raise Exception('Invalid response to GetPlayerInfo request')
+    #
+    
+    return object[0][0]
+  #
+#
+
+class GetPlayerList(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'GetPlayerList'
+    self.params = (100, 0,)
+  #
+  
+  def parse_response(self, response):
+    object = deserialize(response)
+    print(str(object))
+    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not list:
+      raise Exception('Invalid response to GetPlayerInfo request')
+    #
+    
+    return object[0][0]
   #
 #

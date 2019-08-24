@@ -33,19 +33,24 @@ class TMClient:
   #
   
   def send(self, msg):
-    content = msg.serialize(self.req_handle)
-    self.soc.send(content)
-    
-    req_handle = None
-    while req_handle != self.req_handle:
-      req_handle, response = self.receive()
-      if req_handle != self.req_handle:
-        # it's not the response to our message -> must be a callback -> let the main loop deal with it
-        self.callbacks.append(response)
+    try:
+      content = msg.serialize(self.req_handle)
+      self.soc.send(content)
+      
+      req_handle = None
+      while req_handle != self.req_handle:
+        req_handle, response = self.receive()
+        if req_handle != self.req_handle:
+          # it's not the response to our message -> must be a callback -> let the main loop deal with it
+          self.callbacks.append(response)
+        #
       #
+      self.req_handle += 1
+      response_obj = msg.parse_response(response)
+    except Exception as exc:
+      return exc
     #
-    self.req_handle += 1
-    return msg.parse_response(response)
+    return response_obj
   #
   
   def receive(self):

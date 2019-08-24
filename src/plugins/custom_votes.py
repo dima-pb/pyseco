@@ -1,6 +1,7 @@
 import time
 import os
 
+import log
 from plugins.plugin import Plugin
 import messages
 
@@ -57,7 +58,11 @@ class CustomVote(Plugin):
       cmd = messages.Echo(self.SKIP, 'Skip this map')
     #
     if cmd is not None:
-      print(self.controller.call_vote_ex(cmd, self.ratio, self.timeout, 1))
+      try:
+        print(self.controller.call_vote_ex(cmd, self.ratio, self.timeout, 1))
+      except Exception as exc:
+        self.controller.logger.message(str(exc), log.LOG_ERROR)
+      #
     #
   #
   

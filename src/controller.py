@@ -27,6 +27,13 @@ class TMController:
   def run(self):
     self.client.connect()
     self.authenticate(self.username, self.password)
+    players = self.get_player_list()
+    if players is not None:
+      for player in players:
+        self.add_player_info(player['Login'], player)
+      #
+    #
+    
     self.plugins = Plugins(self)
     
     delay = 0.25
@@ -91,11 +98,42 @@ class TMController:
   
   def get_player_by_login(self, login):
     if login not in self.players:
-      self.logger.message('Unlisted player requested' + login, log.LOG_WARNING)
-      p = player.Player(login)
-      self.players[login] = p
+      self.logger.message('Unlisted player requested ' + login, log.LOG_WARNING)
+      info = self.get_playerinfo(login)
+      self.add_player_info(login, info)
     #
-    return self.players[login]
+    player = self.players[login]
+    if player.nickname is None:
+      info = self.get_playerinfo(login)
+      self.add_player_info(login, info)
+    #
+    
+    return player
+  #
+  
+  def add_player_info(self, login, info):
+    if login not in self.players:
+      p = player.Player(login)
+    else:
+      p = self.players[login]
+    #
+      
+    if info is not None:
+      p.nickname = info['NickName']
+      p.id = info['PlayerId']
+      p.team_id = info['TeamId']
+      if 'SpectatorStatus' in info:
+        p.is_spec = info['SpectatorStatus'] != 0
+      elif 'IsSpectator' in info:
+        p.is_spec = info['IsSpectator']
+      #
+      p.ladder_rank = info['LadderRanking']
+      if 'Flags' in info:
+        p.flags = info['Flags']
+      #
+    #
+    self.players[login] = p
+    #
   #
   
   def player_connect(self, params):
@@ -115,85 +153,97 @@ class TMController:
     dict = params[0]
     
     login = dict['Login']
-    p = self.get_player_by_login(login)
-    
-    p.nickname = dict['NickName']
-    p.id = dict['PlayerId']
-    p.team_id = dict['TeamId']
-    p.is_spec = dict['SpectatorStatus']
-    p.ladder_rank = dict['LadderRanking']
-    p.flags = dict['Flags']
+    self.add_player_info(login, dict)
+  #
+  
+  def request(self, message):
+    response = self.client.send(message)
+    if type(response) is Exception:
+      self.logger.message(message.method + ' returned with an error ' + str(response), log.LOG_ERROR)
+      return None
+    #
+    return response
   #
   
   
   def authenticate(self, username, password):
     login = messages.Authenticate(username, password)
-    return self.client.send(login)
+    return self.request(login)
   #
   
   def list_methods(self):
     methods = messages.ListMethods()
-    return self.client.send(methods)
+    return self.request(methods)
   #
   
   def chat_send(self, content):
     chat = messages.ChatSend(content)
-    return self.client.send(chat)
+    return self.request(chat)
   #
   
   def get_current_challenge_info(self):
     info = messages.GetCurrentChallengeInfo()
-    return self.client.send(info)
+    return self.request(info)
   #
   
   def choose_next_challenge(self, filename):
     map = messages.ChooseNextChallenge(filename)
-    return self.client.send(map)
+    return self.request(map)
   #
   
   def next_challenge(self):
     next = messages.NextChallenge()
-    return self.client.send(next)
+    return self.request(next)
   #
   
   def chat_send_server_message(self, content):
     chat = messages.ChatSendServerMessage(content)
-    return self.client.send(chat)
+    return self.request(chat)
   #
   
   def call_vote(self, cmd):
     vote = messages.CallVote(cmd)
-    return self.client.send(vote)
+    return self.request(vote)
   #
   
   def call_vote_ex(self, cmd, ratio, timeout, voter):
     vote = messages.CallVoteEx(cmd, ratio, timeout, voter)
-    return self.client.send(vote)
+    return self.request(vote)
   #
   
   def current_vote_info(self):
     info = messages.GetCurrentCallVote()
-    return self.client.send(info)
+    return self.request(info)
   #
   
   def set_callvote_timeout(self, val):
     timeout = messages.SetCallVoteTimeOut(val)
-    return self.client.send(timeout)
+    return self.request(timeout)
   #
   
   def set_callvote_ratio(self, val):
     ratio = messages.SetCallVoteRatio(val)
-    return self.client.send(ratio)
+    return self.request(ratio)
   #
   
   def set_callvote_ratios(self, tuple):
     ratios = messages.SetCallVoteRatios(tuple)
-    return self.client.send(ratios)
+    return self.request(ratios)
   #
   
   def cancel_vote(self):
     cancel = messages.CancelVote()
-    return self.client.send(cancel)
+    return self.request(cancel)
+  #
+  
+  def get_playerinfo(self, login):
+    info = messages.GetPlayerInfo(login)
+    return self.request(info)
+  #
+  
+  def get_player_list(self):
+    list = messages.GetPlayerList()
+    return self.request(list)
   #
 #
 

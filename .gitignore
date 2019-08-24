@@ -104,3 +104,7 @@ venv.bak/
 .mypy_cache/
 src/config.py
 src/plugins/discord.ini
+src/config.py
+src/config.py
+src/plugins/discord.ini
+src/config.py
