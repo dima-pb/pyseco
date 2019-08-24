@@ -74,7 +74,6 @@ class Discord(Plugin):
     #
     
     msg = nickname_clean + '[' + login + '] : ' + params[2]
-    print(msg)
     
     self.send_string_to_dc(msg)
   #

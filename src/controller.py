@@ -157,12 +157,12 @@ class TMController:
   #
   
   def request(self, message):
-    response = self.client.send(message)
-    if type(response) is Exception:
-      self.logger.message(message.method + ' returned with an error ' + str(response), log.LOG_ERROR)
+    try:
+      return self.client.send(message)
+    except Exception as exc:
+      self.logger.message(message.method + ' returned with an error ' + str(exc), log.LOG_ERROR)
       return None
     #
-    return response
   #
   
   

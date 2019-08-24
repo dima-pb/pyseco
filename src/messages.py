@@ -1,16 +1,15 @@
 import base64
+from xml.sax.saxutils import escape
 import xmlrpc.client
 
 
 def deserialize(msg):
-  try:
-    return xmlrpc.client.loads(msg)
-  except Exception as exc:
-    return exc
-  #
+  return xmlrpc.client.loads(msg)
 #
 
 def serialize(params, method):
+  #params_esc = [escape(p) if type(p) is str else p for p in params]
+  #return xmlrpc.client.dumps(tuple(params_esc), method)
   return xmlrpc.client.dumps(params, method)
 #
 
@@ -28,17 +27,7 @@ class Message:
   #
   
   def parse_response(self, msg):
-    raise Exception('Method parse_response not implemented.')
-  #
-  
-  def parse_response_bool(self, msg):
     object = deserialize(msg)
-    if type(object) is not tuple or len(object) == 0:
-      raise Exception('Invalid response')
-    #
-    if type(object[0]) is not tuple or len(object[0]) == 0:
-      raise Exception('Invalid response')
-    #
     return object[0][0]
   #
 #
@@ -49,16 +38,6 @@ class ListMethods(Message):
     super().__init__()
     self.method = 'system.listMethods'
   #
-  
-  def parse_response(self, response):
-    object = deserialize(response)
-    
-    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple:
-      raise Exception('Invalid response to system.listMethods request')
-    #
-    
-    return object[0][0]
-  #
 #
 
 class Authenticate(Message):
@@ -66,10 +45,6 @@ class Authenticate(Message):
     super().__init__()
     self.method = 'Authenticate'
     self.params = (username, password)
-  #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
   #
 #
 
@@ -79,10 +54,6 @@ class EnableCallbacks(Message):
     self.method = 'EnableCallbacks'
     self.params = (enabled,)
   #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
-  #
 #
 
 class ChatSend(Message):
@@ -91,9 +62,12 @@ class ChatSend(Message):
     self.method = 'ChatSend'
     self.params = (content,)
   #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
+#
+
+class ChatSendServerMessage(ChatSend):
+  def __init__(self, content):
+    super().__init__(content)
+    self.method = 'ChatSendServerMessage'
   #
 #
 
@@ -102,25 +76,12 @@ class GetCurrentChallengeInfo(Message):
     super().__init__()
     self.method = 'GetCurrentChallengeInfo'
   #
-  
-  def parse_response(self, response):
-    object = deserialize(response)
-    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not dict:
-      raise Exception('Invalid response to GetCurrentChallengeInfo request')
-    #
-    
-    return object[0][0]
-  #
 #
 
 class NextChallenge(Message):
   def __init__(self):
     super().__init__()
     self.method = 'NextChallenge'
-  #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
   #
 #
 
@@ -136,23 +97,12 @@ class ChooseNextChallenge(Message):
   #
 #
 
-class ChatSendServerMessage(ChatSend):
-  def __init__(self, content):
-    super().__init__(content)
-    self.method = 'ChatSendServerMessage'
-  #
-#
-
 class Echo(Message):
   def __init__(self, internal, external):
     super().__init__()
     self.method = 'Echo'
     # internal <-> external - listed wrong in the documentation
     self.params = (external, internal)
-  #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
   #
 #
 
@@ -163,10 +113,6 @@ class CallVote(Message):
     self.command_str = serialize(command.params, command.method)
     
     self.params = (self.command_str,)
-  #
-
-  def parse_response(self, response):
-    return deserialize(response)
   #
 #
 
@@ -183,10 +129,6 @@ class GetCurrentCallVote(Message):
     super().__init__()
     self.method = 'GetCurrentCallVote'
   #
-  
-  def parse_response(self, response):
-    return deserialize(response)
-  #
 #
 
 class SetCallVoteTimeOut(Message):
@@ -194,10 +136,6 @@ class SetCallVoteTimeOut(Message):
     super().__init__()
     self.method = 'SetCallVoteTimeOut'
     self.params = (val,)
-  #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
   #
 #
 
@@ -207,10 +145,6 @@ class SetCallVoteRatio(Message):
     self.method = 'SetCallVoteRatio'
     self.params = (val,)
   #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
-  #
 #
 
 class SetCallVoteRatios(Message):
@@ -219,20 +153,12 @@ class SetCallVoteRatios(Message):
     self.method = 'SetCallVoteRatios'
     self.params = (ratios,)
   #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
-  #
 #
 
 class CancelVote(Message):
   def __init__(self):
     super().__init__()
     self.method = 'CancelVote'
-  #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
   #
 #
 
@@ -242,15 +168,6 @@ class GetPlayerInfo(Message):
     self.method = 'GetPlayerInfo'
     self.params = (login, 1)
   #
-  
-  def parse_response(self, response):
-    object = deserialize(response)
-    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not dict:
-      raise Exception('Invalid response to GetPlayerInfo request')
-    #
-    
-    return object[0][0]
-  #
 #
 
 class GetPlayerList(Message):
@@ -258,15 +175,5 @@ class GetPlayerList(Message):
     super().__init__()
     self.method = 'GetPlayerList'
     self.params = (100, 0,)
-  #
-  
-  def parse_response(self, response):
-    object = deserialize(response)
-    print(str(object))
-    if type(object) is not tuple or len(object) == 0 or type(object[0]) is not tuple or type(object[0][0]) is not list:
-      raise Exception('Invalid response to GetPlayerInfo request')
-    #
-    
-    return object[0][0]
   #
 #

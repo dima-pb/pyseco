@@ -4,11 +4,10 @@ import os
 import log
 from plugins.plugin import Plugin
 import messages
+import utilities
+
 
 class CustomVote(Plugin):
-
-  REPLAY = 'replay'
-  SKIP = 'skip'
 
   def __init__(self, controller):
     super().__init__(controller)
@@ -19,6 +18,14 @@ class CustomVote(Plugin):
       { 'Command': 'ChallengeRestart', 'Ratio': -1.0 },
       { 'Command': 'NextChallenge', 'Ratio': -1.0 },
     ))
+    
+    self.callvotes = {
+      'replay': ['replay', 'Replay this map', self.replay_map],
+      'restart': ['replay', 'Replay this map', self.replay_map],
+      'res': ['replay', 'Replay this map', self.replay_map],
+      'skip': ['skip', 'Skip this map', self.skip_map],
+      'next': ['skip', 'Skip this map', self.skip_map],
+    }
     
     self.controller.register_event('TrackMania.PlayerChat', self.check_command)
     self.controller.register_event('TrackMania.Echo', self.echo)
@@ -51,15 +58,19 @@ class CustomVote(Plugin):
     #
     msg = msg[1:]
     
-    cmd = None
-    if msg == self.REPLAY:
-      cmd = messages.Echo(self.REPLAY, 'Replay this map')
-    elif msg == self.SKIP:
-      cmd = messages.Echo(self.SKIP, 'Skip this map')
-    #
-    if cmd is not None:
+    echo = None
+    if msg in self.callvotes:
+      vote_details = self.callvotes[msg]
+      echo = messages.Echo(vote_details[0], vote_details[1])
+      
+      login = params[1]
+      player = self.controller.get_player_by_login(login)
       try:
-        print(self.controller.call_vote_ex(cmd, self.ratio, self.timeout, 1))
+        if self.controller.call_vote_ex(echo, self.ratio, self.timeout, 1):
+          nickname_clean = utilities.strip_colors(player.nickname)
+          #self.controller.chat_send_server_message(nickname_clean + ' started the vote: ' + vote_details[1] + '')
+          #self.controller.chat_send_server_message(nickname_clean)
+        #
       except Exception as exc:
         self.controller.logger.message(str(exc), log.LOG_ERROR)
       #
@@ -67,15 +78,27 @@ class CustomVote(Plugin):
   #
   
   def echo(self, params):
-    if params[0] == self.REPLAY:
-      self.controller.chat_send_server_message('Replay vote passed')
-      map = self.controller.get_current_challenge_info()
-      filename = map['FileName']
-      self.controller.choose_next_challenge(filename)
-    elif params[0] == self.SKIP:
-      self.controller.chat_send_server_message('Skip vote passed')
-      self.controller.next_challenge()
+    cmd_str = params[0]
+    msg = params[1]
+    if cmd_str not in self.callvotes:
+      return
     #
+    
+    vote_info = self.callvotes[cmd_str]
+    self.controller.chat_send_server_message('Vote: "' + msg + '" passed')
+    
+    action = vote_info[2]
+    action()
+  #
+  
+  def replay_map(self):
+    map = self.controller.get_current_challenge_info()
+    filename = map['FileName']
+    self.controller.choose_next_challenge(filename)
+  #
+  
+  def skip_map(self):
+    self.controller.next_challenge()
   #
 #
 
