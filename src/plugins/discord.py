@@ -61,6 +61,9 @@ class Discord(Plugin):
     if params[0] == 0:
       return
     #
+    if params[2].startswith('/'):
+      return
+    #
     
     login = params[1]
     player = self.controller.get_player_by_login(login)

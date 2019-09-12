@@ -20,10 +20,10 @@ class Message:
   #
   
   def serialize(self, req_handle):
-    xml = serialize(self.params, self.method)
+    xml = serialize(self.params, self.method).encode('utf-8')
     size = len(xml).to_bytes(4, 'little')
     req_bytes = req_handle.to_bytes(4, 'little')
-    return b''.join([size, req_bytes, xml.encode('utf-8')])
+    return b''.join([size, req_bytes, xml])
   #
   
   def parse_response(self, msg):
