@@ -38,6 +38,7 @@ class Discord(Plugin):
   #
   
   def read_settings(self):
+    self.admins = []
     cfg = open(os.path.join('plugins', 'discord.ini'), 'r')
     for line in cfg:
       kv = line.split('=')
@@ -50,6 +51,8 @@ class Discord(Plugin):
         self.channel_id = int(kv[1].strip())
       if kv[0] == 'dc_server_invite':
         self.invite = kv[1].strip()
+      if kv[0] == 'admin':
+        self.admins.append(kv[1])
       #
     #
     if self.bot_token is None or self.channel_id is None:
@@ -111,6 +114,8 @@ class Discord(Plugin):
       if msg.is_command:
         if msg.text == 'players':
           self.player_list_to_dc()
+        if msg.text == 'skip':
+          self.dc_skip(msg)
         #
       else:
         output = msg.author_nick + '@$l[' + self.invite + ']discord$: $z$fd0' + msg.text
@@ -126,6 +131,17 @@ class Discord(Plugin):
       msg += utilities.strip_colors(player['NickName']) + ' [' + player['Login'] + ']\n'
     #
     self.send_string_to_dc(msg)
+  #
+  
+  def dc_skip(self, msg):
+    if str(msg.author_id) in self.admins:
+      output = msg.author_nick + '@$l[' + self.invite + ']discord$  $zskipped the map.'
+      self.controller.chat_send_server_message(output)
+      self.controller.next_challenge()
+    else:
+      mention = '<@' + str(msg.author_id) + '>'
+      self.send_string_to_dc(mention + ' You do not have required permissions for that.')
+    #
   #
   
   
