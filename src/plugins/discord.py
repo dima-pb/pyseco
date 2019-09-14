@@ -108,8 +108,24 @@ class Discord(Plugin):
   def tick(self, params):
     while not self.client.messages.empty():
       msg = self.client.messages.get()
-      self.controller.chat_send_server_message(msg[0] + '@$l[' + self.invite + ']discord$: $z$fe1' + msg[1])
+      if msg.is_command:
+        if msg.text == 'players':
+          self.player_list_to_dc()
+        #
+      else:
+        output = msg.author_nick + '@$l[' + self.invite + ']discord$: $z$fd0' + msg.text
+        self.controller.chat_send_server_message(output)
+      #
     #
+  #
+  
+  def player_list_to_dc(self):
+    players = self.controller.get_player_list()
+    msg = str(len(players)) + ' playing.\n'
+    for player in players:
+      msg += utilities.strip_colors(player['NickName']) + ' [' + player['Login'] + ']\n'
+    #
+    self.send_string_to_dc(msg)
   #
   
   
@@ -117,6 +133,16 @@ class Discord(Plugin):
     if self.client.channel is not None:
       asyncio.run_coroutine_threadsafe(self.client.channel.send(string), self.loop)
     #
+  #
+#
+
+
+class DiscordMessage:
+  def __init__(self):
+    self.text = ''
+    self.author_id = 0
+    self.author_nick = ''
+    self.is_command = ''
   #
 #
 
@@ -132,7 +158,7 @@ class DiscordClient(discord.Client):
 
   async def on_ready(self):
     self.channel = self.get_channel(self.channel_id)
-    self.messages.put(('Bot', 'I\'m ready for action!',))
+    self.add_message(0, 'Bot', False, 'I\'m ready for action!')
   #
 
   async def on_message(self, message):
@@ -140,6 +166,20 @@ class DiscordClient(discord.Client):
       return
     #
 
-    self.messages.put((message.author.display_name, message.content,))
+    txt = message.content
+    is_command = txt.startswith('/')
+    if is_command:
+      txt = txt[1:]
+    #
+    self.add_message(message.author.id, message.author.display_name, is_command, txt)
+  #
+  
+  def add_message(self, author_id, author_nick, is_command, txt):
+    msg = DiscordMessage()
+    msg.author_id = author_id
+    msg.author_nick = author_nick
+    msg.is_command = is_command
+    msg.text = txt
+    self.messages.put(msg)
   #
 #
