@@ -26,6 +26,7 @@ class Discord(Plugin):
     self.controller.register_event('TrackMania.PlayerConnect', self.player_connect)
     self.controller.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
     self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
+    self.controller.register_event('TrackMania.Echo', self.echo)
     self.controller.register_event('tick', self.tick)
   #
   
@@ -79,7 +80,7 @@ class Discord(Plugin):
       nickname_clean = ''
     #
     
-    msg = nickname_clean + '[' + login + '] : ' + params[2]
+    msg = '**' + nickname_clean + '**[' + login + '] : ' + params[2]
     
     self.send_string_to_dc(msg)
   #
@@ -104,8 +105,35 @@ class Discord(Plugin):
   def new_challenge(self, params):
     map = params[0]
     mapname_clean = utilities.strip_colors(map['Name'])
-    msg = 'Switching to map ' + mapname_clean + ' by ' + map['Author']
+    msg = 'Switching to map **' + mapname_clean + '** by **' + map['Author'] + '**'
     self.send_string_to_dc(msg)
+  #
+  
+  def echo(self, params):
+    if len(params) != 2:
+      return
+    #
+    if params[1] == 'xaseco::dedimania':
+      vals = params[0].split('#')
+      if len(vals) < 3:
+        return
+      #
+      place = vals[0]
+      time = vals[1]
+      login = vals[2]
+      if len(vals) > 3:
+        # login contains the '#' character (is it even possible?)
+        login = ''.join(vals[2:])
+      #
+      player = self.controller.get_player_by_login(login)
+      if player is None:
+        nickname = login
+      else:
+        nickname = utilities.strip_colors(player.nickname)
+      #
+      msg = '**' + nickname + '**[' + login + '] gained Dedimania place **' + place + '** with a time of **' + time + '**'
+      self.send_string_to_dc(msg)
+    #
   #
   
   def tick(self, params):
