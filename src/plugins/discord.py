@@ -23,7 +23,7 @@ class Discord(Plugin):
     thread.start()
     
     self.controller.register_event('TrackMania.PlayerChat', self.chat_to_dc)
-    self.controller.register_event('TrackMania.PlayerConnect', self.player_connect)
+    self.controller.register_event('PlayerConnectComplete', self.player_connect)
     self.controller.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
     self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
     self.controller.register_event('TrackMania.Echo', self.echo)
@@ -85,14 +85,14 @@ class Discord(Plugin):
     self.send_string_to_dc(msg)
   #
   
-  def player_connect(self, params):
-    player = self.controller.get_player_by_login(params[0])
+  def player_connect(self, login):
+    player = self.controller.get_player_by_login(login)
     if player is None:
       return
     #
     
     nickname_clean = utilities.strip_colors(player.nickname)
-    msg = nickname_clean + '[' + player.login + '] connected. (' + str(len(self.controller.players)) + ' online)'
+    msg = '**' + nickname_clean + '**[' + player.login + '] connected. (' + str(len(self.controller.players)) + ' online)'
     self.send_string_to_dc(msg)
   #
   

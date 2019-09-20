@@ -117,10 +117,13 @@ class TMController:
     else:
       p = self.players[login]
     #
-      
+    just_entered = p.id == None
+    initialized = False
+    
     if info is not None:
       p.nickname = info['NickName']
       p.id = info['PlayerId']
+      initialized = p.id != None
       p.team_id = info['TeamId']
       if 'SpectatorStatus' in info:
         p.is_spec = info['SpectatorStatus'] != 0
@@ -133,6 +136,9 @@ class TMController:
       #
     #
     self.players[login] = p
+    
+    if just_entered and initialized:
+      self.raise_event('PlayerConnectComplete', login)
     #
   #
   
