@@ -146,7 +146,8 @@ class Discord(Plugin):
           self.dc_skip(msg)
         #
       else:
-        output = msg.author_nick + '@$l[' + self.invite + ']discord$: $z$fd0' + msg.text
+        nick = msg.author_nick.replace('$', '$$')
+        output = '[' + nick + '@$l[' + self.invite + ']discord$l] $z$s' + msg.text
         self.controller.chat_send_server_message(output)
       #
     #
@@ -163,12 +164,12 @@ class Discord(Plugin):
   
   def dc_skip(self, msg):
     if str(msg.author_id) in self.admins:
-      output = msg.author_nick + '@$l[' + self.invite + ']discord$  $zskipped the map.'
+      output = msg.author_nick + '@$l[' + self.invite + ']discord$l skipped the map.'
       self.controller.chat_send_server_message(output)
       self.controller.next_challenge()
     else:
       mention = '<@' + str(msg.author_id) + '>'
-      self.send_string_to_dc(mention + ' You do not have required permissions for that.')
+      self.send_string_to_dc(mention + ' You do not have required permissions for that action.')
     #
   #
   
@@ -202,7 +203,7 @@ class DiscordClient(discord.Client):
 
   async def on_ready(self):
     self.channel = self.get_channel(self.channel_id)
-    self.add_message(0, 'Bot', False, 'I\'m ready for action!')
+    self.add_message(0, 'Bot', False, 'Connected to Discord Channel')
   #
 
   async def on_message(self, message):
