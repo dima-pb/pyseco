@@ -6,6 +6,7 @@ import config
 import log
 import messages
 import player
+import sys
 from plugins.plugins import Plugins
 
 
@@ -13,9 +14,9 @@ class TMController:
 
   def __init__(self, config, logger):
     self.logger = logger
-    self.client = client.TMClient(config.URL, config.PORT)
-    self.username = config.USERNAME_SUPERADMIN
-    self.password = config.PASSWORD_SUPERADMIN
+    self.client = client.TMClient(config.url, config.port)
+    self.username = config.username_superadmin
+    self.password = config.password_superadmin
     self.players = {} # login-string -> player object
     self.events = {} # string -> list of receiver-callbacks
     
@@ -202,6 +203,11 @@ class TMController:
     return self.request(next)
   #
   
+  def restart(self):
+    res = messages.ChallengeRestart()
+    return self.request(res)
+  #
+  
   def chat_send_server_message(self, content):
     chat = messages.ChatSendServerMessage(content)
     return self.request(chat)
@@ -251,11 +257,22 @@ class TMController:
     list = messages.GetPlayerList()
     return self.request(list)
   #
+  
+  def send_display_manialink_page(self, xml, duration, hide_on_click):
+    ml = messages.SendDisplayManialinkPage(xml, duration, hide_on_click)
+    return self.request(ml)
+  #
+  
+  def send_display_manialink_page_to_login(self, login, xml, duration, hide_on_click):
+    ml = messages.SendDisplayManialinkPageToLogin(login, xml, duration, hide_on_click)
+    return self.request(ml)
+  #
 #
 
 
-cfg = config.TM_CONFIG()
-logger = log.Logging(cfg.LOG_PATH, cfg.LOG_LEVEL)
+
+cfg = config.Config('pyseco.cfg')
+logger = log.Logging(cfg.log_path, cfg.log_level)
 
 controller = TMController(cfg, logger)
 try:

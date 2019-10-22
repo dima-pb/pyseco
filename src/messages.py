@@ -85,6 +85,13 @@ class NextChallenge(Message):
   #
 #
 
+class ChallengeRestart(Message):
+  def __init__(self):
+    super().__init__()
+    self.method = 'ChallengeRestart'
+  #
+#
+
 class ChooseNextChallenge(Message):
   def __init__(self, filename):
     super().__init__()
@@ -175,5 +182,21 @@ class GetPlayerList(Message):
     super().__init__()
     self.method = 'GetPlayerList'
     self.params = (100, 0,)
+  #
+#
+
+class SendDisplayManialinkPage(Message):
+  def __init__(self, xml, duration, hide_on_click):
+    super().__init__()
+    self.method = 'SendDisplayManialinkPage'
+    self.params = (xml, duration, hide_on_click,)
+  #
+#
+
+class SendDisplayManialinkPageToLogin(Message):
+  def __init__(self, login, xml, duration, hide_on_click):
+    super().__init__()
+    self.method = 'SendDisplayManialinkPageToLogin'
+    self.params = (login, xml, duration, hide_on_click,)
   #
 #

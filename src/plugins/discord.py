@@ -3,6 +3,7 @@ import discord
 import threading
 import queue
 import os
+import subprocess
 
 from plugins.plugin import Plugin
 import utilities
@@ -28,6 +29,17 @@ class Discord(Plugin):
     self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
     self.controller.register_event('TrackMania.Echo', self.echo)
     self.controller.register_event('tick', self.tick)
+    
+    self.commands = {
+      'players': self.player_list_to_dc,
+      'restart': self.dc_restart,
+      'res': self.dc_restart,
+      'skip': self.dc_skip,
+      'next': self.dc_skip,
+      'runxaseco': self.run_xaseco,
+      'startxaseco': self.run_xaseco,
+      'admins': self.list_admins,
+    }
   #
   
   async def start_discord_client(self):
@@ -53,7 +65,11 @@ class Discord(Plugin):
       if kv[0] == 'dc_server_invite':
         self.invite = kv[1].strip()
       if kv[0] == 'admin':
-        self.admins.append(kv[1])
+        self.admins.append(kv[1].strip())
+      if kv[0] == 'xaseco_path':
+        self.xaseco_path = kv[1].strip()
+      if kv[0] == 'xaseco_dir':
+        self.xaseco_dir = kv[1].strip()
       #
     #
     if self.bot_token is None or self.channel_id is None:
@@ -140,10 +156,9 @@ class Discord(Plugin):
     while not self.client.messages.empty():
       msg = self.client.messages.get()
       if msg.is_command:
-        if msg.text == 'players':
-          self.player_list_to_dc()
-        if msg.text == 'skip':
-          self.dc_skip(msg)
+        if msg.text in self.commands:
+          method = self.commands[msg.text]
+          method(msg)
         #
       else:
         nick = msg.author_nick.replace('$', '$$')
@@ -153,7 +168,7 @@ class Discord(Plugin):
     #
   #
   
-  def player_list_to_dc(self):
+  def player_list_to_dc(self, msg):
     players = self.controller.get_player_list()
     msg = str(len(players)) + ' playing.\n'
     for player in players:
@@ -171,6 +186,36 @@ class Discord(Plugin):
       mention = '<@' + str(msg.author_id) + '>'
       self.send_string_to_dc(mention + ' You do not have required permissions for that action.')
     #
+  #
+  
+  def dc_restart(self, msg):
+    if str(msg.author_id) in self.admins:
+      output = msg.author_nick + '@$l[' + self.invite + ']discord$l restarted the map.'
+      self.controller.chat_send_server_message(output)
+      self.controller.restart()
+    else:
+      mention = '<@' + str(msg.author_id) + '>'
+      self.send_string_to_dc(mention + ' You do not have required permissions for that action.')
+    #
+  #
+  
+  def run_xaseco(self, msg):
+    if str(msg.author_id) in self.admins:
+      output = msg.author_nick + '@$l[' + self.invite + ']discord$l started xaseco.'
+      self.controller.chat_send_server_message(output)
+      subprocess.Popen(self.xaseco_path, cwd=self.xaseco_dir)
+    else:
+      mention = '<@' + str(msg.author_id) + '>'
+      self.send_string_to_dc(mention + ' You do not have required permissions for that action.')
+    #
+  #
+  
+  def list_admins(self, msg):
+    res = ''
+    for admin in self.admins:
+      res += '<@' + admin + '> '
+    #
+    self.send_string_to_dc(res)
   #
   
   
