@@ -36,7 +36,7 @@ class CustomVote(Plugin):
     self.timeout = 30000
     self.ratio = 0.5
     for line in cfg:
-      kv = line.split('=')
+      kv = line.split('=', 1)
       if len(kv) != 2:
         continue
       #

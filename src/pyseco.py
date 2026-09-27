@@ -93,7 +93,13 @@ class TMController:
       return
     #
     for method in self.events[event_name]:
-      method(params)
+      # a failing handler (e.g. a plugin) must not take down the controller
+      try:
+        method(params)
+      except Exception:
+        self.logger.message('Handler ' + method.__qualname__ + ' failed on event ' + event_name + ':\n'
+          + traceback.format_exc(), log.LOG_ERROR)
+      #
     #
   #
   

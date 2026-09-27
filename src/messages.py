@@ -98,10 +98,6 @@ class ChooseNextChallenge(Message):
     self.method = 'ChooseNextChallenge'
     self.params = (filename,)
   #
-  
-  def parse_response(self, response):
-    return self.parse_response_bool(response)
-  #
 #
 
 class Echo(Message):

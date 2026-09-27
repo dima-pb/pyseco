@@ -24,7 +24,7 @@ class Config:
   def read_config(self):
     f = open(self.filename, 'r')
     for line in f:
-      kv = line.split('=')
+      kv = line.split('=', 1)
       if len(kv) != 2:
         continue
       #

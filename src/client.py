@@ -20,8 +20,8 @@ class TMClient:
     self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     self.soc.connect((self.url, self.port))
     
-    size = int.from_bytes(self.soc.recv(4), 'little')
-    protocol = self.soc.recv(size).decode('utf-8')
+    size = int.from_bytes(self.recv_exact(4), 'little')
+    protocol = self.recv_exact(size).decode('utf-8')
     if protocol not in self.supported_protocols:
       raise ValueError('Unsupported protocol ' + protocol)
     #
@@ -34,7 +34,7 @@ class TMClient:
   
   def send(self, msg):
     content = msg.serialize(self.req_handle)
-    self.soc.send(content)
+    self.soc.sendall(content)
     
     req_handle = None
     while req_handle != self.req_handle:
@@ -48,12 +48,27 @@ class TMClient:
     return msg.parse_response(response)
   #
   
+  def recv_exact(self, size):
+    # recv() may return fewer bytes than requested (large messages arrive in several chunks)
+    chunks = []
+    remaining = size
+    while remaining > 0:
+      chunk = self.soc.recv(remaining)
+      if not chunk:
+        raise ConnectionError('Connection to the server was closed')
+      #
+      chunks.append(chunk)
+      remaining -= len(chunk)
+    #
+    return b''.join(chunks)
+  #
+
   def receive(self):
-    header = self.soc.recv(8)
+    header = self.recv_exact(8)
     size = int.from_bytes(header[0:4], 'little')
     req_handle = int.from_bytes(header[4:8], 'little')
-    
-    content = self.soc.recv(size)
+
+    content = self.recv_exact(size)
     return req_handle, content.decode('utf-8')
   #
   

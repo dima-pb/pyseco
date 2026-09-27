@@ -1,1 +1,1 @@
-python3 controller.py </dev/null >pyseco.log 2>&1 &
+python3 pyseco.py </dev/null >pyseco.log 2>&1 &
