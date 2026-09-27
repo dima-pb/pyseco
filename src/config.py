@@ -19,6 +19,7 @@ class Config:
     self.password_user = 'User'
     self.log_path = 'Logs'
     self.log_level = 3
+    self.plugins = ['ad', 'discord']
   #
   
   def read_config(self):
@@ -48,6 +49,8 @@ class Config:
         self.log_path = kv[1].strip()
       elif kv[0] == 'log_level':
         self.log_level = int(kv[1].strip())
+      elif kv[0] == 'plugins':
+        self.plugins = [name.strip() for name in kv[1].split(',') if name.strip()]
       #
     #
     f.close()
@@ -64,5 +67,6 @@ class Config:
     print(self.password_user)
     print(self.log_path)
     print(self.log_level)
+    print(self.plugins)
   #
 #

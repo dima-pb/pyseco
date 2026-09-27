@@ -1,4 +1,4 @@
-import time
+import asyncio
 import traceback
 
 import client
@@ -6,7 +6,6 @@ import config
 import log
 import messages
 import player
-import sys
 from plugins.plugins import Plugins
 
 
@@ -14,80 +13,94 @@ class TMController:
 
   def __init__(self, config, logger):
     self.logger = logger
-    self.client = client.TMClient(config.url, config.port)
+    self.client = client.TMClient(config.url, config.port, self.queue_callback)
     self.username = config.username_superadmin
     self.password = config.password_superadmin
+    self.plugin_names = config.plugins
+    self.plugins = None
     self.players = {} # login-string -> player object
-    self.events = {} # string -> list of receiver-callbacks
-    
+    self.events = {} # string -> list of receiver-callbacks (async functions)
+    self.callbacks = asyncio.Queue() # server callbacks waiting to be processed, in arrival order
+
     self.register_event('TrackMania.PlayerConnect', self.player_connect)
     self.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
     self.register_event('TrackMania.PlayerInfoChanged', self.player_info_changed)
   #
 
-  def run(self):
-    self.client.connect()
-    self.authenticate(self.username, self.password)
-    players = self.get_player_list()
+  async def run(self):
+    await self.client.connect()
+    await self.authenticate(self.username, self.password)
+    players = await self.get_player_list()
     if players is not None:
       for player in players:
-        self.add_player_info(player['Login'], player)
+        await self.add_player_info(player['Login'], player)
       #
     #
-    
-    self.plugins = Plugins(self)
-    
-    delay = 0.25
-    prev_tick = time.time()
-    prev_second = prev_tick
-    while True:
-      cbs = self.client.load_callbacks()
-      
-      for cb in cbs:
-        object = messages.deserialize(cb)
-        self.process_callback(object)
+
+    self.plugins = Plugins(self, self.plugin_names)
+    await self.plugins.start()
+
+    dispatcher = asyncio.create_task(self.dispatch_callbacks())
+    timer = asyncio.create_task(self.timer())
+    try:
+      # read_task runs until the connection is lost (ConnectionError) or stop() is called (cancelled)
+      await asyncio.wait([self.client.read_task])
+      if not self.client.read_task.cancelled():
+        self.client.read_task.result() # re-raises the ConnectionError
       #
-      
-      self.client.reset_callbacks()
-      
-      self.raise_event('tick', None)
-      
-      now = time.time()
-      if now - prev_second >= 1.0:
-        self.raise_event('second_passed', None)
-        prev_second = now
-      #
-      
-      now = time.time()
-      duration = now - prev_tick
-      if duration < delay:
-        time.sleep(delay - duration)
-      #
-      prev_tick = now
+    finally:
+      dispatcher.cancel()
+      timer.cancel()
+      await self.plugins.stop()
+      await self.client.disconnect()
     #
   #
-  
-  def process_callback(self, cb):
+
+  async def stop(self):
+    # makes run() return
+    await self.client.disconnect()
+  #
+
+  def queue_callback(self, xml):
+    # called by the client's reader task; handlers are run by dispatch_callbacks instead, because
+    # a handler that awaits a request would otherwise wait on the very task that has to read the response
+    self.callbacks.put_nowait(xml)
+  #
+
+  async def dispatch_callbacks(self):
+    while True:
+      xml = await self.callbacks.get()
+      await self.process_callback(messages.deserialize(xml))
+    #
+  #
+
+  async def timer(self):
+    while True:
+      await asyncio.sleep(1.0)
+      await self.raise_event('second_passed', None)
+    #
+  #
+
+  async def process_callback(self, cb):
     self.logger.message('Processing callback ' + str(cb), log.LOG_VERBOSE)
     if type(cb) is not tuple or len(cb) != 2:
       self.logger.message('Unexpected callback value ' + str(cb), log.LOG_WARNING)
       return
     #
-    
+
     event_name = cb[1]
     params = cb[0]
-    self.raise_event(event_name, params)
-    #
+    await self.raise_event(event_name, params)
   #
-  
+
   def register_event(self, event_name, method):
     if event_name not in self.events:
       self.events[event_name] = []
     #
     self.events[event_name].append(method)
   #
-  
-  def raise_event(self, event_name, params):
+
+  async def raise_event(self, event_name, params):
     self.logger.message('Raising event ' + event_name + ' with parameters ' + str(params), log.LOG_DEBUG)
     if event_name not in self.events:
       return
@@ -95,30 +108,30 @@ class TMController:
     for method in self.events[event_name]:
       # a failing handler (e.g. a plugin) must not take down the controller
       try:
-        method(params)
+        await method(params)
       except Exception:
         self.logger.message('Handler ' + method.__qualname__ + ' failed on event ' + event_name + ':\n'
           + traceback.format_exc(), log.LOG_ERROR)
       #
     #
   #
-  
-  def get_player_by_login(self, login):
+
+  async def get_player_by_login(self, login):
     if login not in self.players:
       self.logger.message('Unlisted player requested ' + login, log.LOG_WARNING)
-      info = self.get_playerinfo(login)
-      self.add_player_info(login, info)
+      info = await self.get_playerinfo(login)
+      await self.add_player_info(login, info)
     #
     player = self.players[login]
     if player.nickname is None:
-      info = self.get_playerinfo(login)
-      self.add_player_info(login, info)
+      info = await self.get_playerinfo(login)
+      await self.add_player_info(login, info)
     #
-    
+
     return player
   #
-  
-  def add_player_info(self, login, info):
+
+  async def add_player_info(self, login, info):
     if login not in self.players:
       p = player.Player(login)
     else:
@@ -126,7 +139,7 @@ class TMController:
     #
     just_entered = p.id == None
     initialized = False
-    
+
     if info is not None:
       p.nickname = info['NickName']
       p.id = info['PlayerId']
@@ -143,150 +156,141 @@ class TMController:
       #
     #
     self.players[login] = p
-    
+
     if just_entered and initialized:
-      self.raise_event('PlayerConnectComplete', login)
+      await self.raise_event('PlayerConnectComplete', login)
     #
   #
-  
-  def player_connect(self, params):
+
+  async def player_connect(self, params):
     login = params[0]
     is_spec = params[1]
-    
+
     p = player.Player(login, is_spec)
     self.players[login] = p
   #
-  
-  def player_disconnect(self, params):
-    p = self.get_player_by_login(params[0])
-    del self.players[params[0]]
+
+  async def player_disconnect(self, params):
+    p = self.players.pop(params[0], None)
+    if p is not None:
+      # plugins get the complete player object (nickname etc.), it's no longer in self.players
+      await self.raise_event('PlayerDisconnectComplete', p)
+    #
   #
-  
-  def player_info_changed(self, params):
+
+  async def player_info_changed(self, params):
     dict = params[0]
-    
+
     login = dict['Login']
-    self.add_player_info(login, dict)
+    await self.add_player_info(login, dict)
   #
-  
-  def request(self, message):
+
+  async def request(self, message):
     try:
-      return self.client.send(message)
+      return await self.client.send(message)
     except Exception as exc:
       self.logger.message(message.method + ' returned with an error ' + str(exc), log.LOG_ERROR)
       return None
     #
   #
-  
-  
-  def authenticate(self, username, password):
-    login = messages.Authenticate(username, password)
-    return self.request(login)
+
+
+  async def authenticate(self, username, password):
+    return await self.request(messages.Authenticate(username, password))
   #
-  
-  def list_methods(self):
-    methods = messages.ListMethods()
-    return self.request(methods)
+
+  async def list_methods(self):
+    return await self.request(messages.ListMethods())
   #
-  
-  def chat_send(self, content):
-    chat = messages.ChatSend(content)
-    return self.request(chat)
+
+  async def chat_send(self, content):
+    return await self.request(messages.ChatSend(content))
   #
-  
-  def get_current_challenge_info(self):
-    info = messages.GetCurrentChallengeInfo()
-    return self.request(info)
+
+  async def get_current_challenge_info(self):
+    return await self.request(messages.GetCurrentChallengeInfo())
   #
-  
-  def choose_next_challenge(self, filename):
-    map = messages.ChooseNextChallenge(filename)
-    return self.request(map)
+
+  async def choose_next_challenge(self, filename):
+    return await self.request(messages.ChooseNextChallenge(filename))
   #
-  
-  def next_challenge(self):
-    next = messages.NextChallenge()
-    return self.request(next)
+
+  async def next_challenge(self):
+    return await self.request(messages.NextChallenge())
   #
-  
-  def restart(self):
-    res = messages.ChallengeRestart()
-    return self.request(res)
+
+  async def restart(self):
+    return await self.request(messages.ChallengeRestart())
   #
-  
-  def chat_send_server_message(self, content):
-    chat = messages.ChatSendServerMessage(content)
-    return self.request(chat)
+
+  async def chat_send_server_message(self, content):
+    return await self.request(messages.ChatSendServerMessage(content))
   #
-  
-  def call_vote(self, cmd):
-    vote = messages.CallVote(cmd)
-    return self.request(vote)
+
+  async def call_vote(self, cmd):
+    return await self.request(messages.CallVote(cmd))
   #
-  
-  def call_vote_ex(self, cmd, ratio, timeout, voter):
-    vote = messages.CallVoteEx(cmd, ratio, timeout, voter)
-    return self.request(vote)
+
+  async def call_vote_ex(self, cmd, ratio, timeout, voter):
+    return await self.request(messages.CallVoteEx(cmd, ratio, timeout, voter))
   #
-  
-  def current_vote_info(self):
-    info = messages.GetCurrentCallVote()
-    return self.request(info)
+
+  async def current_vote_info(self):
+    return await self.request(messages.GetCurrentCallVote())
   #
-  
-  def set_callvote_timeout(self, val):
-    timeout = messages.SetCallVoteTimeOut(val)
-    return self.request(timeout)
+
+  async def set_callvote_timeout(self, val):
+    return await self.request(messages.SetCallVoteTimeOut(val))
   #
-  
-  def set_callvote_ratio(self, val):
-    ratio = messages.SetCallVoteRatio(val)
-    return self.request(ratio)
+
+  async def set_callvote_ratio(self, val):
+    return await self.request(messages.SetCallVoteRatio(val))
   #
-  
-  def set_callvote_ratios(self, tuple):
-    ratios = messages.SetCallVoteRatios(tuple)
-    return self.request(ratios)
+
+  async def set_callvote_ratios(self, tuple):
+    return await self.request(messages.SetCallVoteRatios(tuple))
   #
-  
-  def cancel_vote(self):
-    cancel = messages.CancelVote()
-    return self.request(cancel)
+
+  async def cancel_vote(self):
+    return await self.request(messages.CancelVote())
   #
-  
-  def get_playerinfo(self, login):
-    info = messages.GetPlayerInfo(login)
-    return self.request(info)
+
+  async def get_playerinfo(self, login):
+    return await self.request(messages.GetPlayerInfo(login))
   #
-  
-  def get_player_list(self):
-    list = messages.GetPlayerList()
-    return self.request(list)
+
+  async def get_player_list(self):
+    return await self.request(messages.GetPlayerList())
   #
-  
-  def send_display_manialink_page(self, xml, duration, hide_on_click):
-    ml = messages.SendDisplayManialinkPage(xml, duration, hide_on_click)
-    return self.request(ml)
+
+  async def send_display_manialink_page(self, xml, duration, hide_on_click):
+    return await self.request(messages.SendDisplayManialinkPage(xml, duration, hide_on_click))
   #
-  
-  def send_display_manialink_page_to_login(self, login, xml, duration, hide_on_click):
-    ml = messages.SendDisplayManialinkPageToLogin(login, xml, duration, hide_on_click)
-    return self.request(ml)
+
+  async def send_display_manialink_page_to_login(self, login, xml, duration, hide_on_click):
+    return await self.request(messages.SendDisplayManialinkPageToLogin(login, xml, duration, hide_on_click))
   #
 #
 
 
+async def main():
+  cfg = config.Config('pyseco.cfg')
+  logger = log.Logging(cfg.log_path, cfg.log_level)
 
-cfg = config.Config('pyseco.cfg')
-logger = log.Logging(cfg.log_path, cfg.log_level)
-
-controller = TMController(cfg, logger)
-try:
-  controller.run()
-except Exception as exc:
-  tb = traceback.format_exc()
-  logger.message(str(exc), log.LOG_ERROR)
-  logger.message(tb, log.LOG_ERROR)
-  controller.client.disconnect()
+  controller = TMController(cfg, logger)
+  try:
+    await controller.run()
+  except Exception as exc:
+    logger.message(str(exc), log.LOG_ERROR)
+    logger.message(traceback.format_exc(), log.LOG_ERROR)
+  #
 #
 
+
+if __name__ == '__main__':
+  try:
+    asyncio.run(main())
+  except KeyboardInterrupt:
+    pass
+  #
+#

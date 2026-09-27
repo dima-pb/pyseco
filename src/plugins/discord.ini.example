@@ -1,0 +1,22 @@
+; Copy to discord.ini and fill in. discord.ini is not tracked by git (it contains the bot token).
+
+[discord]
+; Bot token from https://discord.com/developers/applications -> your app -> Bot -> Reset Token.
+; On the same page enable "Message Content Intent", otherwise the bot can't read the channel.
+bot_token =
+
+; Channel that is mirrored with the server chat (Discord developer mode: right click channel -> Copy Channel ID)
+channel_id =
+
+; Invite link shown in-game next to the names of discord users (optional)
+dc_server_invite = discord.gg/xxxxxxxx
+
+; Prefix for bot commands in the channel, e.g. !help
+command_prefix = !
+
+; Discord user ids that may use admin commands (skip, restart, ...), comma separated
+admins =
+
+; Optional: allows admins to start xaseco from discord (!runxaseco)
+xaseco_path =
+xaseco_dir =

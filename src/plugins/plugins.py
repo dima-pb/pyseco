@@ -1,16 +1,54 @@
-import plugins.discord as discord
-import plugins.echo as echo
-import plugins.custom_votes as custom_votes
-import plugins.ad as ad
+import importlib
+import traceback
+
+import log
+
+
+# plugin name (as used in pyseco.cfg) -> module, class
+AVAILABLE = {
+  'ad': ('plugins.ad', 'Ad'),
+  'custom_votes': ('plugins.custom_votes', 'CustomVote'),
+  'discord': ('plugins.discord', 'Discord'),
+  'echo': ('plugins.echo', 'Echo'),
+}
 
 
 class Plugins:
-  def __init__(self, controller):
+  def __init__(self, controller, names):
+    self.controller = controller
+    self.names = names
     self.plugins = []
-    
-    #self.plugins.append(echo.Echo(controller))
-    #self.plugins.append(custom_votes.CustomVote(controller))
-    self.plugins.append(ad.Ad(controller))
-    self.plugins.append(discord.Discord(controller))
+  #
+
+  async def start(self):
+    logger = self.controller.logger
+    for name in self.names:
+      if name not in AVAILABLE:
+        logger.message('Unknown plugin ' + name, log.LOG_ERROR)
+        continue
+      #
+      module_name, class_name = AVAILABLE[name]
+      # a broken plugin (missing library, bad settings, ...) is skipped instead of stopping the controller
+      try:
+        module = importlib.import_module(module_name)
+        plugin = getattr(module, class_name)(self.controller)
+        await plugin.start()
+      except Exception:
+        logger.message('Plugin ' + name + ' could not be started:\n' + traceback.format_exc(), log.LOG_ERROR)
+        continue
+      #
+      self.plugins.append(plugin)
+      logger.message('Plugin ' + name + ' started', log.LOG_INFO)
+    #
+  #
+
+  async def stop(self):
+    for plugin in self.plugins:
+      try:
+        await plugin.stop()
+      except Exception:
+        self.controller.logger.message('Plugin stop failed:\n' + traceback.format_exc(), log.LOG_ERROR)
+      #
+    #
   #
 #

@@ -13,11 +13,6 @@ class CustomVote(Plugin):
     super().__init__(controller)
     
     self.read_settings()
-    self.controller.set_callvote_timeout(self.timeout)
-    self.controller.set_callvote_ratios((
-      { 'Command': 'ChallengeRestart', 'Ratio': -1.0 },
-      { 'Command': 'NextChallenge', 'Ratio': -1.0 },
-    ))
     
     self.callvotes = {
       'replay': ['replay', 'Replay this map', self.replay_map],
@@ -29,6 +24,15 @@ class CustomVote(Plugin):
     
     self.controller.register_event('TrackMania.PlayerChat', self.check_command)
     self.controller.register_event('TrackMania.Echo', self.echo)
+  #
+  
+  async def start(self):
+    await self.controller.set_callvote_timeout(self.timeout)
+    # disable the native votes, they are replaced by the chat commands of this plugin
+    await self.controller.set_callvote_ratios((
+      { 'Command': 'ChallengeRestart', 'Ratio': -1.0 },
+      { 'Command': 'NextChallenge', 'Ratio': -1.0 },
+    ))
   #
   
   def read_settings(self):
@@ -48,7 +52,7 @@ class CustomVote(Plugin):
     #
   #
 
-  def check_command(self, params):
+  async def check_command(self, params):
     if params[0] == 0: # don't react to server-own messages
       return
     #
@@ -64,9 +68,9 @@ class CustomVote(Plugin):
       echo = messages.Echo(vote_details[0], vote_details[1])
       
       login = params[1]
-      player = self.controller.get_player_by_login(login)
+      player = await self.controller.get_player_by_login(login)
       try:
-        if self.controller.call_vote_ex(echo, self.ratio, self.timeout, 1):
+        if await self.controller.call_vote_ex(echo, self.ratio, self.timeout, 1):
           nickname_clean = utilities.strip_colors(player.nickname)
           #self.controller.chat_send_server_message(nickname_clean + ' started the vote: ' + vote_details[1] + '')
           #self.controller.chat_send_server_message(nickname_clean)
@@ -77,7 +81,7 @@ class CustomVote(Plugin):
     #
   #
   
-  def echo(self, params):
+  async def echo(self, params):
     cmd_str = params[0]
     msg = params[1]
     if cmd_str not in self.callvotes:
@@ -85,20 +89,20 @@ class CustomVote(Plugin):
     #
     
     vote_info = self.callvotes[cmd_str]
-    self.controller.chat_send_server_message('Vote: "' + msg + '" passed')
+    await self.controller.chat_send_server_message('Vote: "' + msg + '" passed')
     
     action = vote_info[2]
-    action()
+    await action()
   #
   
-  def replay_map(self):
-    map = self.controller.get_current_challenge_info()
+  async def replay_map(self):
+    map = await self.controller.get_current_challenge_info()
     filename = map['FileName']
-    self.controller.choose_next_challenge(filename)
+    await self.controller.choose_next_challenge(filename)
   #
   
-  def skip_map(self):
-    self.controller.next_challenge()
+  async def skip_map(self):
+    await self.controller.next_challenge()
   #
 #
 
