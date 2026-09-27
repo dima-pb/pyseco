@@ -9,7 +9,6 @@ from plugins.plugin import Plugin
 import utilities
 
 
-SETTINGS_FILE = os.path.join('plugins', 'discord.ini')
 MAX_MESSAGE_LENGTH = 2000 # discord limit
 MAX_QUEUED_MESSAGES = 200
 
@@ -62,20 +61,21 @@ class Discord(Plugin):
   #
 
   def read_settings(self):
-    if not os.path.exists(SETTINGS_FILE):
-      raise Exception('Missing settings file ' + SETTINGS_FILE + ' (see discord.ini.example)')
+    settings_file = self.controller.plugin_settings_path('discord.ini')
+    if not os.path.exists(settings_file):
+      raise Exception('Missing settings file ' + settings_file + ' (see discord.ini.example)')
     #
-    cfg = configparser.ConfigParser()
-    cfg.read(SETTINGS_FILE, encoding='utf-8')
+    cfg = configparser.ConfigParser(interpolation=None) # '%' has no special meaning (tokens, passwords)
+    cfg.read(settings_file, encoding='utf-8')
     if not cfg.has_section('discord'):
-      raise Exception(SETTINGS_FILE + ' has no [discord] section (see discord.ini.example)')
+      raise Exception(settings_file + ' has no [discord] section (see discord.ini.example)')
     #
     s = cfg['discord']
 
     self.bot_token = s.get('bot_token', '').strip()
     channel_id = s.get('channel_id', '').strip()
     if not self.bot_token or not channel_id.isdigit():
-      raise Exception('bot_token and channel_id must be set in ' + SETTINGS_FILE)
+      raise Exception('bot_token and channel_id must be set in ' + settings_file)
     #
     self.channel_id = int(channel_id)
     self.invite = s.get('dc_server_invite', '').strip()

@@ -1,4 +1,7 @@
+import argparse
 import asyncio
+import os
+import signal
 import traceback
 
 import client
@@ -11,8 +14,9 @@ from plugins.plugins import Plugins
 
 class TMController:
 
-  def __init__(self, config, logger):
+  def __init__(self, config, logger, config_dir='.'):
     self.logger = logger
+    self.config_dir = config_dir # contains pyseco.cfg, plugin settings are in its plugins/ subdirectory
     self.client = client.TMClient(config.url, config.port, self.queue_callback)
     self.username = config.username_superadmin
     self.password = config.password_superadmin
@@ -59,6 +63,10 @@ class TMController:
   async def stop(self):
     # makes run() return
     await self.client.disconnect()
+  #
+
+  def plugin_settings_path(self, filename):
+    return os.path.join(self.config_dir, 'plugins', filename)
   #
 
   def queue_callback(self, xml):
@@ -274,10 +282,17 @@ class TMController:
 
 
 async def main():
-  cfg = config.Config('pyseco.cfg')
-  logger = log.Logging(cfg.log_path, cfg.log_level)
+  parser = argparse.ArgumentParser(description='TrackMania Forever server controller')
+  parser.add_argument('--config-dir', default='.',
+    help='directory with pyseco.cfg and plugins/*.ini, relative log paths are relative to it (default: current directory)')
+  args = parser.parse_args()
 
-  controller = TMController(cfg, logger)
+  cfg = config.Config(os.path.join(args.config_dir, 'pyseco.cfg'))
+  logger = log.Logging(os.path.join(args.config_dir, cfg.log_path), cfg.log_level)
+
+  controller = TMController(cfg, logger, args.config_dir)
+  # docker and systemd stop programs with SIGTERM: shut down cleanly (plugins, discord logout)
+  asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(controller.stop()))
   try:
     await controller.run()
   except Exception as exc:

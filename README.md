@@ -29,6 +29,9 @@ The bot needs the **Message Content Intent** (Discord developer portal -> your a
 Start with `src/pyseco.sh` (runs in the background, output in `src/pyseco.log`)
 or in the foreground with `cd src && ../.venv/bin/python pyseco.py`.
 
+`--config-dir DIR` reads `pyseco.cfg` and `plugins/*.ini` from another directory (default: the current one),
+e.g. to run one instance per server. SIGTERM (docker, systemd) stops the controller cleanly.
+
 ## Writing plugins
 Derive from `plugins.plugin.Plugin`, register handlers with `controller.register_event(name, handler)` in `__init__`
 and add the plugin to `AVAILABLE` in `src/plugins/plugins.py`.

@@ -36,7 +36,7 @@ class CustomVote(Plugin):
   #
   
   def read_settings(self):
-    cfg = open(os.path.join('plugins', 'custom_votes.ini'), 'r')
+    cfg = open(self.controller.plugin_settings_path('custom_votes.ini'), 'r')
     self.timeout = 30000
     self.ratio = 0.5
     for line in cfg:
