@@ -45,6 +45,7 @@ class TMController:
     await self.client.connect()
     try:
       await self.login()
+      await self.client.enable_callbacks()
     except Exception:
       await self.client.disconnect()
       raise

@@ -34,7 +34,10 @@ class TMClient:
     #
 
     self.read_task = asyncio.create_task(self.read_loop())
+  #
 
+  async def enable_callbacks(self):
+    # needs a successful Authenticate first, servers deny it to connections that are not logged in
     if not await self.send(messages.EnableCallbacks()):
       raise Exception('Unable to enable callbacks')
     #
