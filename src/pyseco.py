@@ -2,7 +2,9 @@ import argparse
 import asyncio
 import os
 import signal
+import sys
 import traceback
+import xmlrpc.client
 
 import client
 import config
@@ -10,6 +12,14 @@ import log
 import messages
 import player
 from plugins.plugins import Plugins
+
+
+class AuthenticationError(Exception):
+  def __init__(self, username, reason):
+    super().__init__('Login as ' + username + ' failed: ' + reason
+      + ' - check username_superadmin/password_superadmin in pyseco.cfg against the dedicated server config')
+  #
+#
 
 
 class TMController:
@@ -33,7 +43,12 @@ class TMController:
 
   async def run(self):
     await self.client.connect()
-    await self.authenticate(self.username, self.password)
+    try:
+      await self.login()
+    except Exception:
+      await self.client.disconnect()
+      raise
+    #
     players = await self.get_player_list()
     if players is not None:
       for player in players:
@@ -57,6 +72,19 @@ class TMController:
       timer.cancel()
       await self.plugins.stop()
       await self.client.disconnect()
+    #
+  #
+
+  async def login(self):
+    # Without a successful login every admin request would fail later with "Permission denied",
+    # which hides the actual cause. So a failed login ends the controller right away.
+    try:
+      success = await self.client.send(messages.Authenticate(self.username, self.password))
+    except xmlrpc.client.Fault as fault:
+      raise AuthenticationError(self.username, fault.faultString) from None
+    #
+    if not success:
+      raise AuthenticationError(self.username, 'the server rejected the login')
     #
   #
 
@@ -295,16 +323,21 @@ async def main():
   asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(controller.stop()))
   try:
     await controller.run()
+  except AuthenticationError as exc:
+    logger.message(str(exc), log.LOG_FATAL)
+    return 1
   except Exception as exc:
     logger.message(str(exc), log.LOG_ERROR)
     logger.message(traceback.format_exc(), log.LOG_ERROR)
+    return 1
   #
+  return 0
 #
 
 
 if __name__ == '__main__':
   try:
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))
   except KeyboardInterrupt:
     pass
   #

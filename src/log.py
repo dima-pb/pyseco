@@ -20,6 +20,7 @@ class Logging:
     self.path = path
     self.level = level
     self.level_names = ['ALL', 'VERBOSE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'FATAL', 'DISABLED']
+    os.makedirs(self.path, exist_ok=True)
   #
   
   def message(self, content, level = LOG_INFO):
