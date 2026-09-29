@@ -14,9 +14,22 @@ class FakeServer:
   def __init__(self, password='SuperAdmin'):
     self.password = password
     self.calls = []
+    # a small map list: current map, next map (ChooseNextChallenge), add/remove, like the real server
+    self.maps = [self.make_map(i) for i in range(1, 6)]
+    self.current = 0
+    self.next = 1
+    self.refuse = set() # file names CheckChallengeForCurrentServerParams refuses
     self.handlers = {
       'Authenticate': self.authenticate,
       'GetPlayerList': lambda *args: [],
+      'GetChallengeList': lambda count, start: [dict(m) for m in self.maps[start:start + count]],
+      'GetCurrentChallengeInfo': lambda: dict(self.maps[self.current]),
+      'GetNextChallengeInfo': lambda: dict(self.maps[self.next]),
+      'ChooseNextChallenge': self.choose_next,
+      'CheckChallengeForCurrentServerParams': self.check_map,
+      'AddChallenge': self.add_map,
+      'RemoveChallenge': self.remove_map,
+      'Echo': self.echo,
     }
     self.writer = None
     self.connected = asyncio.Event()
@@ -42,6 +55,68 @@ class FakeServer:
       raise xmlrpc.client.Fault(-1000, 'Password incorrect.')
     #
     return True
+  #
+
+  @staticmethod
+  def make_map(i, prefix='Map'):
+    return {'UId': 'uid' + str(i), 'Name': '$f00' + prefix + ' ' + str(i), 'FileName': 'Challenges\\' + prefix + str(i) + '.Challenge.Gbx',
+      'Author': 'author' + str(i), 'Environment': 'Stadium', 'GoldTime': 30000, 'CopperPrice': 100}
+  #
+
+  def index(self, filename):
+    for i, m in enumerate(self.maps):
+      if m['FileName'] == filename:
+        return i
+      #
+    #
+    raise xmlrpc.client.Fault(-1000, 'Challenge not found.')
+  #
+
+  def choose_next(self, filename):
+    self.next = self.index(filename)
+    return True
+  #
+
+  def check_map(self, filename):
+    if filename in self.refuse:
+      raise xmlrpc.client.Fault(-1000, 'Wrong environment.')
+    #
+    return True
+  #
+
+  def add_map(self, filename):
+    self.maps.append(self.make_map(len(self.maps) + 100, 'Added') | {'FileName': filename,
+      'UId': 'uid-' + filename})
+    self.list_modified()
+    return True
+  #
+
+  def remove_map(self, filename):
+    i = self.index(filename)
+    del self.maps[i]
+    if i < self.current:
+      self.current -= 1
+    #
+    self.list_modified()
+    return True
+  #
+
+  def list_modified(self):
+    asyncio.get_running_loop().create_task(
+      self.callback('TrackMania.ChallengeListModified', self.current, self.next, True))
+  #
+
+  def echo(self, first, second):
+    # the real server swaps the parameters in the callback
+    asyncio.get_running_loop().create_task(self.callback('TrackMania.Echo', second, first))
+    return True
+  #
+
+  async def play_next(self):
+    # the server switches to the next map: EndRace, then BeginChallenge of the next map
+    self.current = self.next
+    self.next = (self.current + 1) % len(self.maps)
+    await self.callback('TrackMania.BeginChallenge', dict(self.maps[self.current]), False, False)
   #
 
   def called(self, method):

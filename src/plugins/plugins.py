@@ -4,12 +4,13 @@ import traceback
 import log
 
 
-# plugin name (as used in pyseco.cfg) -> module, class
+# plugin name (as used in pyseco.toml) -> module, class
 AVAILABLE = {
   'ad': ('plugins.ad', 'Ad'),
   'custom_votes': ('plugins.custom_votes', 'CustomVote'),
   'discord': ('plugins.discord', 'Discord'),
   'echo': ('plugins.echo', 'Echo'),
+  'jukebox': ('plugins.jukebox', 'Jukebox'),
 }
 
 
@@ -18,6 +19,12 @@ class Plugins:
     self.controller = controller
     self.names = names
     self.plugins = []
+    self.by_name = {}
+  #
+  
+  def get(self, name):
+    # a started plugin by its name, or None
+    return self.by_name.get(name)
   #
 
   async def start(self):
@@ -38,6 +45,7 @@ class Plugins:
         continue
       #
       self.plugins.append(plugin)
+      self.by_name[name] = plugin
       logger.message('Plugin ' + name + ' started', log.LOG_INFO)
     #
   #

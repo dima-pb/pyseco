@@ -1,3 +1,4 @@
+import accounts
 import commands
 import log
 from plugins.plugin import Plugin
@@ -71,8 +72,14 @@ class CustomVote(Plugin):
 
   async def replay_map(self):
     map = await self.controller.get_current_challenge_info()
-    filename = map['FileName']
-    await self.controller.choose_next_challenge(filename)
+    jukebox = self.controller.plugins.get('jukebox')
+    if jukebox is None:
+      await self.controller.choose_next_challenge(map['FileName'])
+      return
+    #
+    # through the jukebox, which decides the next map; first in the queue
+    from plugins.jukebox import Entry
+    await jukebox.add(Entry.from_map(map, source='Replay'), accounts.ADMIN, jukebox.no_reply, front=True)
   #
 
   async def skip_map(self):

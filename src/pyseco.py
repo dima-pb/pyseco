@@ -12,6 +12,7 @@ import commands
 import config
 import db
 import log
+import maps
 import messages
 import player
 import utilities
@@ -35,6 +36,7 @@ class TMController:
     self.accounts = accounts.Accounts(self.db, config.masteradmins)
     self.commands = commands.Commands(logger)
     self.client = client.TMClient(config.url, config.port, self.queue_callback)
+    self.maps = None
     self.username = config.username_superadmin
     self.password = config.password_superadmin
     self.plugin_names = config.plugins
@@ -47,6 +49,7 @@ class TMController:
     self.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
     self.register_event('TrackMania.PlayerInfoChanged', self.player_info_changed)
     self.register_event('TrackMania.PlayerChat', self.player_chat)
+    self.maps = maps.Maps(self) # registers its events before the plugins, so they see an up to date list
     self.register_core_commands()
   #
 
@@ -77,6 +80,8 @@ class TMController:
       #
     #
 
+    await self.maps.start()
+    
     self.plugins = Plugins(self, self.plugin_names)
     await self.plugins.start()
 

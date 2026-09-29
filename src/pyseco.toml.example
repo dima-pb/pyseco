@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, discord, echo
+# plugins to load: ad, custom_votes, discord, echo, jukebox
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -28,6 +28,12 @@ channel_id = 0
 invite = ""
 # prefix of bot commands in the channel
 prefix = "!"
+
+[jukebox]
+# players can't wish one of the last <recent> maps (operators and above can)
+recent = 10
+# entries per player at a time (operators and above: no limit)
+per_player = 1
 
 [custom_votes]
 # vote duration in ms and share of yes votes needed

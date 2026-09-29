@@ -12,6 +12,10 @@ Which plugins are loaded is set with `plugins=` in `src/pyseco.cfg`:
     but more can very easily be added
   - `ad`: shows a clickable logo to every player that connects
   - `echo`: example plugin, repeats the chat
+  - `jukebox`: players wish the next maps (`/list`, `/jukebox <number>`, `/nextmap`, `/history`); temporary
+    (TMX) maps are removed after they were played unless an admin keeps them with `/addthis`. Replaces XAseco's
+    jukebox: with XAseco running, its `plugin.rasp_jukebox.php` is replaced by the bridge from tmf-docker
+    (`xaseco/addons`), so Records-Eyepiece's track list wishes maps through pyseco
 
 ## Setup
 Requires Python 3.11 or newer.
