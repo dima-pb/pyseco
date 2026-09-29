@@ -1,31 +1,36 @@
-import time
-import os
-
+import commands
 import log
 from plugins.plugin import Plugin
 import messages
-import utilities
 
 
 class CustomVote(Plugin):
+  # /skip and /replay as votes of the server's own voting engine. The vote carries an Echo call;
+  # when it passes, the server executes the Echo and the plugin reacts to the Echo callback.
+  #
+  # Settings ([custom_votes] in pyseco.toml):
+  #   timeout = 30000   vote duration in ms
+  #   ratio = 0.5       share of yes votes needed
 
   def __init__(self, controller):
     super().__init__(controller)
-    
-    self.read_settings()
-    
+
+    settings = controller.settings('custom_votes')
+    self.timeout = int(settings.get('timeout', 30000))
+    self.ratio = float(settings.get('ratio', 0.5))
+
     self.callvotes = {
-      'replay': ['replay', 'Replay this map', self.replay_map],
-      'restart': ['replay', 'Replay this map', self.replay_map],
-      'res': ['replay', 'Replay this map', self.replay_map],
-      'skip': ['skip', 'Skip this map', self.skip_map],
-      'next': ['skip', 'Skip this map', self.skip_map],
+      'replay': ['Replay this map', self.replay_map],
+      'skip': ['Skip this map', self.skip_map],
     }
-    
-    self.controller.register_event('TrackMania.PlayerChat', self.check_command)
-    self.controller.register_event('TrackMania.Echo', self.echo)
+
+    controller.commands.register('replay', self.vote_replay, help='starts a vote to replay this map',
+      sources=(commands.GAME,), aliases=('res', 'restart'))
+    controller.commands.register('skip', self.vote_skip, help='starts a vote to skip this map',
+      sources=(commands.GAME,), aliases=('next',))
+    controller.register_event('TrackMania.Echo', self.echo)
   #
-  
+
   async def start(self):
     await self.controller.set_callvote_timeout(self.timeout)
     # disable the native votes, they are replaced by the chat commands of this plugin
@@ -34,75 +39,43 @@ class CustomVote(Plugin):
       { 'Command': 'NextChallenge', 'Ratio': -1.0 },
     ))
   #
+
+  async def vote_replay(self, ctx):
+    await self.start_vote('replay')
+  #
   
-  def read_settings(self):
-    cfg = open(self.controller.plugin_settings_path('custom_votes.ini'), 'r')
-    self.timeout = 30000
-    self.ratio = 0.5
-    for line in cfg:
-      kv = line.split('=', 1)
-      if len(kv) != 2:
-        continue
-      #
-      if kv[0] == 'timeout':
-        self.timeout = int(kv[1].strip())
-      if kv[0] == 'ratio':
-        self.ratio = float(kv[1].strip())
-      #
+  async def vote_skip(self, ctx):
+    await self.start_vote('skip')
+  #
+  
+  async def start_vote(self, vote):
+    description = self.callvotes[vote][0]
+    echo = messages.Echo(vote, description)
+    try:
+      await self.controller.call_vote_ex(echo, self.ratio, self.timeout, 1)
+    except Exception as exc:
+      self.controller.logger.message(str(exc), log.LOG_ERROR)
     #
   #
 
-  async def check_command(self, params):
-    if params[0] == 0: # don't react to server-own messages
-      return
-    #
-    msg = params[2].strip()
-    if not msg.startswith('/'):
-      return
-    #
-    msg = msg[1:]
-    
-    echo = None
-    if msg in self.callvotes:
-      vote_details = self.callvotes[msg]
-      echo = messages.Echo(vote_details[0], vote_details[1])
-      
-      login = params[1]
-      player = await self.controller.get_player_by_login(login)
-      try:
-        if await self.controller.call_vote_ex(echo, self.ratio, self.timeout, 1):
-          nickname_clean = utilities.strip_colors(player.nickname)
-          #self.controller.chat_send_server_message(nickname_clean + ' started the vote: ' + vote_details[1] + '')
-          #self.controller.chat_send_server_message(nickname_clean)
-        #
-      except Exception as exc:
-        self.controller.logger.message(str(exc), log.LOG_ERROR)
-      #
-    #
-  #
-  
   async def echo(self, params):
     cmd_str = params[0]
     msg = params[1]
     if cmd_str not in self.callvotes:
       return
     #
-    
-    vote_info = self.callvotes[cmd_str]
+
     await self.controller.chat_send_server_message('Vote: "' + msg + '" passed')
-    
-    action = vote_info[2]
-    await action()
+    await self.callvotes[cmd_str][1]()
   #
-  
+
   async def replay_map(self):
     map = await self.controller.get_current_challenge_info()
     filename = map['FileName']
     await self.controller.choose_next_challenge(filename)
   #
-  
+
   async def skip_map(self):
     await self.controller.next_challenge()
   #
 #
-

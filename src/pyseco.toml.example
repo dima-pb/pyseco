@@ -1,0 +1,35 @@
+# pyseco settings. Copy to pyseco.toml (not tracked by git, it contains passwords).
+# Relative paths are relative to the directory of this file.
+
+[server]
+# XML-RPC connection to the dedicated server (dedicated_cfg.txt: xmlrpc_port, SuperAdmin password)
+host = "127.0.0.1"
+port = 5000
+login = "SuperAdmin"
+password = "SuperAdmin"
+
+[controller]
+# TM logins with all rights; other roles are given in game with /setrole
+masteradmins = []
+# plugins to load: ad, custom_votes, discord, echo
+plugins = []
+# database, logs and caches
+data_dir = "data"
+# all, verbose, debug, info, warning, error, fatal
+log_level = "info"
+
+[discord]
+# bot token from https://discord.com/developers/applications -> your app -> Bot.
+# There, also enable "Message Content Intent", otherwise the bot can't read the channel.
+token = ""
+# channel mirrored with the server chat (developer mode: right click the channel -> Copy Channel ID)
+channel_id = 0
+# shown in game next to the names of discord users (optional)
+invite = ""
+# prefix of bot commands in the channel
+prefix = "!"
+
+[custom_votes]
+# vote duration in ms and share of yes votes needed
+timeout = 30000
+ratio = 0.5

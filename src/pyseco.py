@@ -6,27 +6,34 @@ import sys
 import traceback
 import xmlrpc.client
 
+import accounts
 import client
+import commands
 import config
+import db
 import log
 import messages
 import player
+import utilities
 from plugins.plugins import Plugins
 
 
 class AuthenticationError(Exception):
   def __init__(self, username, reason):
     super().__init__('Login as ' + username + ' failed: ' + reason
-      + ' - check username_superadmin/password_superadmin in pyseco.cfg against the dedicated server config')
+      + ' - check login/password in the [server] section of pyseco.toml against the dedicated server config')
   #
 #
 
 
 class TMController:
 
-  def __init__(self, config, logger, config_dir='.'):
+  def __init__(self, config, logger):
+    self.config = config
     self.logger = logger
-    self.config_dir = config_dir # contains pyseco.cfg, plugin settings are in its plugins/ subdirectory
+    self.db = db.Database(config.database)
+    self.accounts = accounts.Accounts(self.db, config.masteradmins)
+    self.commands = commands.Commands(logger)
     self.client = client.TMClient(config.url, config.port, self.queue_callback)
     self.username = config.username_superadmin
     self.password = config.password_superadmin
@@ -39,10 +46,23 @@ class TMController:
     self.register_event('TrackMania.PlayerConnect', self.player_connect)
     self.register_event('TrackMania.PlayerDisconnect', self.player_disconnect)
     self.register_event('TrackMania.PlayerInfoChanged', self.player_info_changed)
+    self.register_event('TrackMania.PlayerChat', self.player_chat)
+    self.register_core_commands()
   #
 
   async def run(self):
-    await self.client.connect()
+    os.makedirs(self.config.data_dir, exist_ok=True)
+    await self.db.open()
+    try:
+      await self.accounts.start()
+      await self.run_connected()
+    finally:
+      await self.db.close()
+    #
+  #
+  
+  async def run_connected(self):
+    await self.connect()
     try:
       await self.login()
       await self.client.enable_callbacks()
@@ -76,6 +96,23 @@ class TMController:
     #
   #
 
+  async def connect(self, wait_seconds=60):
+    # the server may still be starting (e.g. both started by docker compose), so retry for a while
+    for attempt in range(wait_seconds // 2):
+      try:
+        await self.client.connect()
+        return
+      except OSError as exc:
+        if attempt == 0:
+          self.logger.message('Server not reachable yet (' + str(exc) + '), retrying for ' + str(wait_seconds) + 's',
+            log.LOG_INFO)
+        #
+        await asyncio.sleep(2)
+      #
+    #
+    await self.client.connect()
+  #
+  
   async def login(self):
     # Without a successful login every admin request would fail later with "Permission denied",
     # which hides the actual cause. So a failed login ends the controller right away.
@@ -94,8 +131,9 @@ class TMController:
     await self.client.disconnect()
   #
 
-  def plugin_settings_path(self, filename):
-    return os.path.join(self.config_dir, 'plugins', filename)
+  def settings(self, section):
+    # the plugin's section of pyseco.toml as dict
+    return self.config.section(section)
   #
 
   def queue_callback(self, xml):
@@ -195,6 +233,7 @@ class TMController:
     self.players[login] = p
 
     if just_entered and initialized:
+      await self.accounts.player_seen(login, p.nickname, visit=True)
       await self.raise_event('PlayerConnectComplete', login)
     #
   #
@@ -220,6 +259,85 @@ class TMController:
 
     login = dict['Login']
     await self.add_player_info(login, dict)
+  #
+
+  async def player_chat(self, params):
+    # /name args -> registered command; unknown commands are left alone (XAseco may know them)
+    uid, login, text = params[0], params[1], params[2].strip()
+    if uid == 0 or not text.startswith('/') or len(text) < 2:
+      return
+    #
+    words = text[1:].split()
+    player = self.players.get(login)
+    ctx = commands.Context(commands.GAME, login, player.nickname if player else login,
+      await self.accounts.role(login), words[1:], lambda reply: self.chat_to(login, reply))
+    await self.commands.run(ctx, words[0])
+  #
+
+  async def chat_to(self, login, text):
+    # server message only the player sees
+    return await self.request(messages.Call('ChatSendServerMessageToLogin', '$fb0»$z$s ' + text, login))
+  #
+
+  async def call(self, method, *params):
+    # any server method; unlike request() it raises the server's error (xmlrpc.client.Fault)
+    return await self.client.send(messages.Call(method, *params))
+  #
+
+  def register_core_commands(self):
+    self.commands.register('pyseco', self.cmd_help, help='lists the pyseco commands you can use',
+      sources=(commands.GAME,))
+    self.commands.register('help', self.cmd_help, help='lists the commands you can use', sources=(commands.DISCORD,))
+    self.commands.register('staff', self.cmd_staff, role=accounts.OPERATOR, help='lists admins and operators')
+    self.commands.register('setrole', self.cmd_setrole, role=accounts.MASTERADMIN,
+      help='gives a player a role', usage='<login> <player|operator|admin>')
+    self.commands.register('link', self.cmd_link, help='links your discord account (shows a code for !link)',
+      sources=(commands.GAME,))
+  #
+
+  async def cmd_help(self, ctx):
+    prefix = '/' if ctx.source == commands.GAME else '!'
+    available = self.commands.available(ctx.role, ctx.source)
+    lines = [prefix + c.name + (' ' + c.usage if c.usage else '') + ' - ' + c.help for c in available]
+    if ctx.source == commands.GAME:
+      # the game chat shows only a few lines at once, so one command per message
+      for line in lines:
+        await ctx.reply(line)
+      #
+    else:
+      await ctx.reply('\n'.join(lines))
+    #
+  #
+
+  async def cmd_staff(self, ctx):
+    staff = await self.accounts.staff()
+    if not staff:
+      await ctx.reply('There are no admins or operators.')
+      return
+    #
+    for login, nickname, role in staff:
+      name = utilities.strip_colors(nickname) if nickname else login
+      await ctx.reply(accounts.ROLE_NAMES[role] + ': ' + name + ' (' + login + ')')
+    #
+  #
+
+  async def cmd_setrole(self, ctx):
+    if len(ctx.args) != 2 or ctx.args[1].lower() not in accounts.ROLES_BY_NAME:
+      raise commands.UsageError()
+    #
+    login, role = ctx.args[0], accounts.ROLES_BY_NAME[ctx.args[1].lower()]
+    try:
+      await self.accounts.set_role(login, role)
+    except ValueError as exc:
+      await ctx.reply(str(exc) + '.')
+      return
+    #
+    await ctx.reply(login + ' is now ' + accounts.ROLE_NAMES[role] + '.')
+  #
+
+  async def cmd_link(self, ctx):
+    code = self.accounts.create_link_code(ctx.login)
+    await ctx.reply('Type $fff!link ' + code + '$z$s in the discord channel within 10 minutes to link your discord account.')
   #
 
   async def request(self, message):
@@ -312,14 +430,19 @@ class TMController:
 
 async def main():
   parser = argparse.ArgumentParser(description='TrackMania Forever server controller')
-  parser.add_argument('--config-dir', default='.',
-    help='directory with pyseco.cfg and plugins/*.ini, relative log paths are relative to it (default: current directory)')
+  parser.add_argument('--config', default='pyseco.toml',
+    help='settings file (default: pyseco.toml); relative paths in it are relative to its directory')
   args = parser.parse_args()
-
-  cfg = config.Config(os.path.join(args.config_dir, 'pyseco.cfg'))
-  logger = log.Logging(os.path.join(args.config_dir, cfg.log_path), cfg.log_level)
-
-  controller = TMController(cfg, logger, args.config_dir)
+  
+  try:
+    cfg = config.Config(args.config)
+  except config.ConfigError as exc:
+    print(exc, file=sys.stderr)
+    return 1
+  #
+  logger = log.Logging(cfg.log_path, cfg.log_level)
+  
+  controller = TMController(cfg, logger)
   # docker and systemd stop programs with SIGTERM: shut down cleanly (plugins, discord logout)
   asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(controller.stop()))
   try:

@@ -1,9 +1,9 @@
 import asyncio
-import configparser
-import os
 
 import discord
 
+import accounts
+import commands
 import log
 from plugins.plugin import Plugin
 import utilities
@@ -26,10 +26,26 @@ class Discord(Plugin):
   # Messages to discord go through a queue that a single sender task works off. That way the
   # server callbacks never wait for discord (rate limits can take seconds), the order is kept, and
   # messages arriving in a burst are combined into one discord message.
+  #
+  # Commands (!name) are the controller's commands available on discord. Their permissions come from
+  # the TM login a discord account is linked to (/link in game, then !link <code> here).
+  #
+  # Settings ([discord] in pyseco.toml):
+  #   token = "..."              bot token
+  #   channel_id = 123           channel mirrored with the server chat
+  #   invite = "discord.gg/..."  shown in game next to discord names (optional)
+  #   prefix = "!"               command prefix (optional)
 
   def __init__(self, controller):
     super().__init__(controller)
-    self.read_settings()
+    settings = controller.settings('discord')
+    self.bot_token = str(settings.get('token', '')).strip()
+    self.channel_id = settings.get('channel_id')
+    if not self.bot_token or not isinstance(self.channel_id, int):
+      raise Exception('token and channel_id (a number) must be set in the [discord] section of pyseco.toml')
+    #
+    self.invite = str(settings.get('invite', '')).strip()
+    self.prefix = str(settings.get('prefix', '!')).strip() or '!'
 
     self.client = DiscordClient(self)
     self.client_task = None
@@ -44,45 +60,17 @@ class Discord(Plugin):
     self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
     self.controller.register_event('TrackMania.Echo', self.echo)
 
-    # discord command -> (handler, admin only, description)
-    self.commands = {
-      'help': (self.dc_help, False, 'show this list'),
-      'players': (self.dc_player_list, False, 'list the players on the server'),
-      'admins': (self.dc_list_admins, False, 'list the bot admins'),
-      'restart': (self.dc_restart, True, 'restart the current map'),
-      'res': (self.dc_restart, True, None),
-      'skip': (self.dc_skip, True, 'skip to the next map'),
-      'next': (self.dc_skip, True, None),
-    }
-    if self.xaseco_path:
-      self.commands['runxaseco'] = (self.dc_run_xaseco, True, 'start xaseco')
-      self.commands['startxaseco'] = (self.dc_run_xaseco, True, None)
-    #
-  #
-
-  def read_settings(self):
-    settings_file = self.controller.plugin_settings_path('discord.ini')
-    if not os.path.exists(settings_file):
-      raise Exception('Missing settings file ' + settings_file + ' (see discord.ini.example)')
-    #
-    cfg = configparser.ConfigParser(interpolation=None) # '%' has no special meaning (tokens, passwords)
-    cfg.read(settings_file, encoding='utf-8')
-    if not cfg.has_section('discord'):
-      raise Exception(settings_file + ' has no [discord] section (see discord.ini.example)')
-    #
-    s = cfg['discord']
-
-    self.bot_token = s.get('bot_token', '').strip()
-    channel_id = s.get('channel_id', '').strip()
-    if not self.bot_token or not channel_id.isdigit():
-      raise Exception('bot_token and channel_id must be set in ' + settings_file)
-    #
-    self.channel_id = int(channel_id)
-    self.invite = s.get('dc_server_invite', '').strip()
-    self.prefix = s.get('command_prefix', '!').strip() or '!'
-    self.admins = [a.strip() for a in s.get('admins', '').split(',') if a.strip()]
-    self.xaseco_path = s.get('xaseco_path', '').strip()
-    self.xaseco_dir = s.get('xaseco_dir', '').strip() or None
+    register = controller.commands.register
+    only_discord = (commands.DISCORD,)
+    register('players', self.cmd_players, help='lists the players on the server', sources=only_discord)
+    register('skip', self.cmd_skip, role=accounts.ADMIN, help='skips to the next map', sources=only_discord,
+      aliases=('next',))
+    register('restart', self.cmd_restart, role=accounts.ADMIN, help='restarts the current map', sources=only_discord,
+      aliases=('res',))
+    register('link', self.cmd_link, help='links your discord account to your TM login (get the code with /link in game)',
+      usage='<code>', sources=only_discord)
+    register('unlink', self.cmd_unlink, help='removes the link to your TM login', sources=only_discord)
+    register('whoami', self.cmd_whoami, help='shows your linked TM login and role', sources=only_discord)
   #
 
   async def start(self):
@@ -214,7 +202,7 @@ class Discord(Plugin):
 
     text = message.content
     if text.startswith(self.prefix):
-      await self.run_command(message, text[len(self.prefix):].strip().lower())
+      await self.run_command(message, text[len(self.prefix):].strip())
       return
     #
     if not text: # e.g. only an attachment
@@ -226,70 +214,78 @@ class Discord(Plugin):
     await self.controller.chat_send_server_message('[' + nick + '@' + link + '] $z$s' + text)
   #
 
-  async def run_command(self, message, name):
-    if name not in self.commands:
+  async def run_command(self, message, text):
+    words = text.split()
+    if not words:
+      return
+    #
+    login = await self.controller.accounts.login_for_discord(message.author.id)
+    role = await self.controller.accounts.role(login) if login else accounts.PLAYER
+    ctx = commands.Context(commands.DISCORD, login, message.author.display_name, role, words[1:],
+      self.reply, discord_id=message.author.id)
+    if not await self.controller.commands.run(ctx, words[0]):
       self.send('Unknown command. Type **' + self.prefix + 'help** for a list.')
-      return
-    #
-    handler, admin_only, _ = self.commands[name]
-    if admin_only and str(message.author.id) not in self.admins:
-      self.send(message.author.mention + ' You do not have the required permissions for that action.')
-      return
-    #
-    try:
-      await handler(message)
-    except Exception as exc:
-      self.log('Command ' + name + ' failed: ' + repr(exc), log.LOG_ERROR)
-      self.send('Command failed.')
     #
   #
 
-  def discord_user_ingame(self, message):
-    nick = message.author.display_name.replace('$', '$$')
+  async def reply(self, text):
+    # command answers may contain TM formatting (nicknames), discord shows them plain
+    self.send(utilities.strip_colors(text))
+  #
+
+  def discord_user_ingame(self, ctx):
+    nick = ctx.display_name.replace('$', '$$')
     return nick + ('@$l[' + self.invite + ']discord$l' if self.invite else '@discord')
   #
 
-  async def dc_help(self, message):
-    lines = []
-    for name, (_, admin_only, description) in self.commands.items():
-      if description is not None:
-        lines.append('**' + self.prefix + name + '** - ' + description + (' (admin)' if admin_only else ''))
-      #
-    #
-    self.send('\n'.join(lines))
-  #
-
-  async def dc_player_list(self, message):
+  async def cmd_players(self, ctx):
     players = await self.controller.get_player_list()
     if players is None:
-      self.send('Could not get the player list from the server.')
+      await ctx.reply('Could not get the player list from the server.')
       return
     #
-    self.send(str(len(players)) + ' playing.')
-    for player in players:
-      self.send(clean_name(player['NickName']) + ' [' + discord.utils.escape_markdown(player['Login']) + ']')
-    #
+    lines = [str(len(players)) + ' playing.']
+    lines += [clean_name(p['NickName']) + ' [' + discord.utils.escape_markdown(p['Login']) + ']' for p in players]
+    await ctx.reply('\n'.join(lines))
   #
 
-  async def dc_list_admins(self, message):
-    # mentions are shown, but don't ping anybody (allowed_mentions is none)
-    self.send(' '.join('<@' + admin + '>' for admin in self.admins) or 'No admins configured.')
-  #
-
-  async def dc_skip(self, message):
-    await self.controller.chat_send_server_message(self.discord_user_ingame(message) + ' skipped the map.')
+  async def cmd_skip(self, ctx):
+    await self.controller.chat_send_server_message(self.discord_user_ingame(ctx) + ' skipped the map.')
     await self.controller.next_challenge()
   #
 
-  async def dc_restart(self, message):
-    await self.controller.chat_send_server_message(self.discord_user_ingame(message) + ' restarted the map.')
+  async def cmd_restart(self, ctx):
+    await self.controller.chat_send_server_message(self.discord_user_ingame(ctx) + ' restarted the map.')
     await self.controller.restart()
   #
 
-  async def dc_run_xaseco(self, message):
-    await self.controller.chat_send_server_message(self.discord_user_ingame(message) + ' started xaseco.')
-    await asyncio.create_subprocess_exec(self.xaseco_path, cwd=self.xaseco_dir)
-    self.send('XAseco started.')
+  async def cmd_link(self, ctx):
+    if len(ctx.args) != 1:
+      raise commands.UsageError()
+    #
+    login = await self.controller.accounts.redeem_link_code(ctx.args[0], ctx.discord_id)
+    if login is None:
+      await ctx.reply('Unknown or expired code. Type /link in game to get a new one.')
+      return
+    #
+    role = await self.controller.accounts.role(login)
+    await ctx.reply('Linked to ' + login + ' (' + accounts.ROLE_NAMES[role] + ').')
+  #
+
+  async def cmd_unlink(self, ctx):
+    if await self.controller.accounts.unlink_discord(ctx.discord_id):
+      await ctx.reply('Link removed.')
+    else:
+      await ctx.reply('Your discord account is not linked.')
+    #
+  #
+
+  async def cmd_whoami(self, ctx):
+    if ctx.login is None:
+      await ctx.reply('Not linked. Type /link in game to get a code, then !link <code> here.')
+    else:
+      await ctx.reply('Linked to ' + ctx.login + ' (' + accounts.ROLE_NAMES[ctx.role] + ').')
+    #
   #
 #
 

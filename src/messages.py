@@ -33,6 +33,16 @@ class Message:
 #
 
 
+class Call(Message):
+  # any server method, e.g. Call('GetChallengeList', 100, 0)
+  def __init__(self, method, *params):
+    super().__init__()
+    self.method = method
+    self.params = params
+  #
+#
+
+
 class ListMethods(Message):
   def __init__(self):
     super().__init__()

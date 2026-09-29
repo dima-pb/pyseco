@@ -102,5 +102,10 @@ venv.bak/
 
 # mypy
 .mypy_cache/
-src/config.py
-src/plugins/discord.ini
+# local settings (passwords, tokens) and runtime data
+src/pyseco.toml
+src/data/
+# settings files of pyseco before 2026-09
+src/pyseco.cfg
+src/plugins/*.ini
+src/Logs/

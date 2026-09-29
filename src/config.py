@@ -1,72 +1,63 @@
+import os
+import tomllib
+
+
+LOG_LEVELS = {'all': 0, 'verbose': 1, 'debug': 2, 'info': 3, 'warning': 4, 'error': 5, 'fatal': 6, 'disabled': 7}
+
+
+class ConfigError(Exception):
+  pass
+#
 
 
 class Config:
+  # All settings in one TOML file (see pyseco.toml.example):
+  #   [server]      connection to the dedicated server
+  #   [controller]  masteradmins, plugins, data directory, logging
+  #   [<plugin>]    one section per plugin, read by the plugin with section('<plugin>')
+  # Relative paths are relative to the directory of the settings file.
 
   def __init__(self, filename):
     self.filename = filename
-    self.set_defaults()
-    self.read_config()
-  #
-  
-  def set_defaults(self):
-    self.url = '127.0.0.1'
-    self.port = 5000
-    self.username_superadmin = 'SuperAdmin'
-    self.password_superadmin = 'SuperAdmin'
-    self.username_admin = 'Admin'
-    self.password_admin = 'Admin'
-    self.username_user = 'User'
-    self.password_user = 'User'
-    self.log_path = 'Logs'
-    self.log_level = 3
-    self.plugins = ['ad', 'discord']
-  #
-  
-  def read_config(self):
-    f = open(self.filename, 'r')
-    for line in f:
-      kv = line.split('=', 1)
-      if len(kv) != 2:
-        continue
+    self.base_dir = os.path.dirname(os.path.abspath(filename))
+    try:
+      with open(filename, 'rb') as f:
+        self.data = tomllib.load(f)
       #
-      if kv[0] == 'url':
-        self.url = kv[1].strip()
-      elif kv[0] == 'port':
-        self.port = int(kv[1].strip())
-      elif kv[0] == 'username_superadmin':
-        self.username_superadmin = kv[1].strip()
-      elif kv[0] == 'password_superadmin':
-        self.password_superadmin = kv[1].strip()
-      elif kv[0] == 'username_admin':
-        self.username_admin = kv[1].strip()
-      elif kv[0] == 'password_admin':
-        self.password_admin = kv[1].strip()
-      elif kv[0] == 'username_user':
-        self.username_user = kv[1].strip()
-      elif kv[0] == 'password_user':
-        self.password_user = kv[1].strip()
-      elif kv[0] == 'log_path':
-        self.log_path = kv[1].strip()
-      elif kv[0] == 'log_level':
-        self.log_level = int(kv[1].strip())
-      elif kv[0] == 'plugins':
-        self.plugins = [name.strip() for name in kv[1].split(',') if name.strip()]
-      #
+    except FileNotFoundError:
+      raise ConfigError('Settings file ' + filename + ' not found (see pyseco.toml.example)') from None
+    except tomllib.TOMLDecodeError as exc:
+      raise ConfigError('Settings file ' + filename + ' is not valid TOML: ' + str(exc)) from None
     #
-    f.close()
+
+    server = self.section('server')
+    self.url = server.get('host', '127.0.0.1')
+    self.port = int(server.get('port', 5000))
+    self.username_superadmin = server.get('login', 'SuperAdmin')
+    self.password_superadmin = server.get('password', 'SuperAdmin')
+
+    controller = self.section('controller')
+    self.masteradmins = [login for login in controller.get('masteradmins', []) if login]
+    self.plugins = list(controller.get('plugins', []))
+    self.data_dir = self.path(controller.get('data_dir', 'data'))
+    level = str(controller.get('log_level', 'info')).lower()
+    if level not in LOG_LEVELS:
+      raise ConfigError('log_level must be one of ' + ', '.join(LOG_LEVELS))
+    #
+    self.log_level = LOG_LEVELS[level]
+    self.log_path = os.path.join(self.data_dir, 'logs')
+    self.database = os.path.join(self.data_dir, 'pyseco.db')
   #
-  
-  def dump(self):
-    print(self.url)
-    print(self.port)
-    print(self.username_superadmin)
-    print(self.password_superadmin)
-    print(self.username_admin)
-    print(self.password_admin)
-    print(self.username_user)
-    print(self.password_user)
-    print(self.log_path)
-    print(self.log_level)
-    print(self.plugins)
+
+  def section(self, name):
+    value = self.data.get(name, {})
+    if not isinstance(value, dict):
+      raise ConfigError('[' + name + '] in ' + self.filename + ' must be a section')
+    #
+    return value
+  #
+
+  def path(self, value):
+    return value if os.path.isabs(value) else os.path.join(self.base_dir, value)
   #
 #
