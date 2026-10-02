@@ -67,6 +67,8 @@ class Discord(Plugin):
       aliases=('res',))
     register('link', self.cmd_link, help='links your discord account to your TM login (get the code with /link in game)',
       usage='<code>', sources=only_discord)
+    register('link', self.cmd_link_code, help='links your discord account (shows a code for !link)',
+      sources=(commands.GAME,))
     register('unlink', self.cmd_unlink, help='removes the link to your TM login', sources=only_discord)
     register('whoami', self.cmd_whoami, help='shows your linked TM login and role', sources=only_discord)
   #
@@ -255,6 +257,13 @@ class Discord(Plugin):
     #
     role = await self.controller.accounts.role(login)
     await ctx.reply('Linked to ' + login + ' (' + roles.NAMES[role] + ').')
+  #
+
+  async def cmd_link_code(self, ctx):
+    # in game: the code to type on discord
+    code = self.controller.accounts.create_link_code(ctx.login)
+    await ctx.reply('Type $fff' + self.prefix + 'link ' + code + '$z$s in the discord channel within 10 minutes to link '
+      'your discord account.')
   #
 
   async def cmd_unlink(self, ctx):

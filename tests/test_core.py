@@ -161,12 +161,14 @@ def test_help_shows_only_allowed_commands(tmp_path):
 #
 
 
-def test_link_code_from_game(tmp_path):
+def test_commands_of_plugins_that_are_not_loaded_are_unknown(tmp_path):
   async def scenario():
     async with Harness(tmp_path) as h:
+      await h.chat('alice', '/pyseco')
+      assert not any('/link' in r for r in h.replies_to('alice')) # belongs to the discord plugin
+      count = len(h.replies_to('alice'))
       await h.chat('alice', '/link')
-      code = h.replies_to('alice')[-1].split('!link ')[1].split('$')[0]
-      assert await h.controller.accounts.redeem_link_code(code, 7) == 'alice'
+      assert len(h.replies_to('alice')) == count
     #
   #
   run(scenario())

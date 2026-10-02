@@ -51,7 +51,6 @@ class Players:
     register('staff', self.cmd_staff, role=roles.OPERATOR, help='lists admins and operators')
     register('setrole', self.cmd_setrole, role=roles.MASTERADMIN, help='gives a player a role',
       usage='<login> <player|operator|admin>')
-    register('link', self.cmd_link, help='links your discord account (shows a code for !link)', sources=(commands.GAME,))
   #
 
   async def start(self):
@@ -135,10 +134,5 @@ class Players:
       return
     #
     await ctx.reply(login + ' is now ' + roles.NAMES[role] + '.')
-  #
-
-  async def cmd_link(self, ctx):
-    code = self.controller.accounts.create_link_code(ctx.login)
-    await ctx.reply('Type $fff!link ' + code + '$z$s in the discord channel within 10 minutes to link your discord account.')
   #
 #
