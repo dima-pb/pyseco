@@ -63,6 +63,12 @@ class UI:
     return str(self.next_manialink_id - 1)
   #
 
+  def position(self, name, x, y):
+    # where the widget with this name goes: x, y as given, unless [widgets.<name>] in pyseco.toml moves it
+    place = self.controller.settings('widgets').get(name, {})
+    return float(place.get('x', x)), float(place.get('y', y))
+  #
+
   def actions(self, count, handler):
     # reserves count actions, returns the first; a click on first + n calls await handler(login, n)
     first = self.next_action

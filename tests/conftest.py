@@ -92,6 +92,15 @@ class Harness:
     await self.settle()
   #
 
+  async def drive(self, login, checkpoints):
+    # a run: the checkpoints (the last one is the finish line), then the finish
+    for i, time in enumerate(checkpoints):
+      await self.server.callback('TrackMania.PlayerCheckpoint', 5, login, time, 0, i)
+    #
+    await self.server.callback('TrackMania.PlayerFinish', 5, login, checkpoints[-1])
+    await self.settle()
+  #
+
   async def tick(self, seconds=1):
     for _ in range(seconds):
       await self.controller.events.emit('SecondPassed')

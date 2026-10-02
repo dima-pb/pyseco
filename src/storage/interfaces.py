@@ -36,6 +36,16 @@ class Ban:
 
 
 @dataclass
+class Record:
+  login: str
+  nickname: str # as last seen
+  time: int # ms
+  checkpoints: list # [ms] of the run, as the server sent them
+  date: str # 'YYYY-MM-DD HH:MM:SS', UTC, when it was driven
+#
+
+
+@dataclass
 class QueuedMap:
   uid: str
   filename: str
@@ -199,13 +209,37 @@ class ModerationStore(ABC):
 #
 
 
+class RecordStore(ABC):
+  # the best time of every player on every map (local records)
+
+  @abstractmethod
+  async def best(self, uid, login):
+    # the player's Record on the map or None
+    ...
+  #
+
+  @abstractmethod
+  async def save(self, uid, login, time, checkpoints):
+    # the player's new best time on the map (replaces the old one), driven now
+    ...
+  #
+
+  @abstractmethod
+  async def ranking(self, uid, limit):
+    # [Record] of the map, best first; equal times: who drove it first is first
+    ...
+  #
+#
+
+
 class Storage(ABC):
-  # one backend; players, maps, playlist, moderation are its stores
+  # one backend; players, maps, playlist, moderation, records are its stores
 
   players: PlayerStore
   maps: MapStore
   playlist: PlaylistStore
   moderation: ModerationStore
+  records: RecordStore
 
   @abstractmethod
   async def open(self):

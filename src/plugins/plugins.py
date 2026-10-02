@@ -11,6 +11,7 @@ AVAILABLE = {
   'discord': ('plugins.discord', 'Discord'),
   'flexitime': ('plugins.flexitime', 'Flexitime'),
   'jukebox': ('plugins.jukebox', 'Jukebox'),
+  'local_records': ('plugins.local_records', 'LocalRecords'),
   'welcome': ('plugins.welcome', 'Welcome'),
 }
 

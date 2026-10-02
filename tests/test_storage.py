@@ -197,3 +197,27 @@ def test_visits_are_counted(make_storage):
   #
   with_storage(make_storage, scenario)
 #
+
+
+def test_records(make_storage):
+  async def scenario(s):
+    assert await s.records.ranking('map', 10) == []
+    await s.players.seen('ann', '$f00Ann', True)
+    await s.records.save('map', 'ann', 9080, [3000, 6100, 9080])
+    await s.records.save('map', 'bob', 9050, [2900, 6000, 9050])
+    await s.records.save('map', 'cid', 9080, [3100, 6200, 9080]) # equal to ann, but later
+    await s.records.save('other', 'ann', 1000, [])
+    ranking = await s.records.ranking('map', 10)
+    assert [(r.login, r.time) for r in ranking] == [('bob', 9050), ('ann', 9080), ('cid', 9080)]
+    assert ranking[1].nickname == '$f00Ann' and ranking[0].nickname == 'bob' # unknown players: the login
+    assert ranking[1].checkpoints == [3000, 6100, 9080] and len(ranking[1].date) == 19
+    assert [r.login for r in await s.records.ranking('map', 2)] == ['bob', 'ann']
+
+    await s.records.save('map', 'cid', 9000, [3000, 6000, 9000]) # improved: replaces
+    assert [r.login for r in await s.records.ranking('map', 10)] == ['cid', 'bob', 'ann']
+    assert (await s.records.best('map', 'cid')).time == 9000
+    assert await s.records.best('map', 'nobody') is None
+    assert (await s.records.best('other', 'ann')).checkpoints == []
+  #
+  with_storage(make_storage, scenario)
+#

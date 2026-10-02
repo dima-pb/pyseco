@@ -159,8 +159,7 @@ class TextWidget:
 
   def __init__(self, ui, name, x, y, width=14, height=4, size=2, background=True):
     self.ui = ui
-    place = ui.controller.settings('widgets').get(name, {})
-    x, y = float(place.get('x', x)), float(place.get('y', y))
+    x, y = ui.position(name, x, y)
     self.x, self.y, self.width, self.height, self.size = x, y, width, height, size
     self.background = background
     self.id = ui.manialink_id()

@@ -13,6 +13,8 @@ MAP_STARTED = 'MapStarted'             # server_api.ChallengeInfo of the new map
 MAP_ENDED = 'MapEnded'                 # server_api.ChallengeInfo of the map that ended (the podium follows)
 MAP_LIST_CHANGED = 'MapListChanged'    # None; maps.list was reloaded after maps were added or removed
 PLAYLIST_CHANGED = 'PlaylistChanged'   # None; requests were added or removed, see playlist.queue
+PLAYER_FINISHED = 'PlayerFinished'     # services.race.Finish: a player crossed the finish line
+CHECKPOINT = 'Checkpoint'              # services.race.Checkpoint: a player passed a checkpoint
 SECOND_PASSED = 'SecondPassed'         # None
 
 

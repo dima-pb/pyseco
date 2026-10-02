@@ -2,8 +2,8 @@ import asyncio
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-from storage.interfaces import (Ban, PlaylistStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
-  StoredPlayer)
+from storage.interfaces import (Ban, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap, Record,
+  RecordStore, Storage, StoredPlayer)
 
 
 class Database:
@@ -365,6 +365,59 @@ class SqliteModerationStore(ModerationStore):
 #
 
 
+# ---- records ----
+
+RECORD_MIGRATIONS = [
+  # 1
+  '''
+  CREATE TABLE records (
+    uid TEXT NOT NULL,
+    login TEXT NOT NULL,
+    time INTEGER NOT NULL,
+    checkpoints TEXT NOT NULL DEFAULT '',
+    date TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (uid, login)
+  );
+  CREATE INDEX records_ranking ON records (uid, time, date);
+  ''',
+]
+
+
+class SqliteRecordStore(RecordStore):
+
+  def __init__(self, db):
+    self.db = db
+  #
+
+  async def migrate(self):
+    await self.db.migrate('records', RECORD_MIGRATIONS)
+  #
+
+  @staticmethod
+  def record(row):
+    checkpoints = [int(c) for c in row['checkpoints'].split(',')] if row['checkpoints'] else []
+    return Record(row['login'], row['nickname'] or row['login'], row['time'], checkpoints, row['date'])
+  #
+
+  async def best(self, uid, login):
+    row = await self.db.fetchone('SELECT r.*, p.nickname FROM records r LEFT JOIN players p ON p.login = r.login '
+      'WHERE r.uid = ? AND r.login = ?', (uid, login))
+    return self.record(row) if row else None
+  #
+
+  async def save(self, uid, login, time, checkpoints):
+    await self.db.execute("INSERT OR REPLACE INTO records (uid, login, time, checkpoints, date) "
+      "VALUES (?, ?, ?, ?, datetime('now'))", (uid, login, time, ','.join(str(c) for c in checkpoints)))
+  #
+
+  async def ranking(self, uid, limit):
+    rows = await self.db.fetchall('SELECT r.*, p.nickname FROM records r LEFT JOIN players p ON p.login = r.login '
+      'WHERE r.uid = ? ORDER BY r.time, r.date, r.rowid LIMIT ?', (uid, limit))
+    return [self.record(r) for r in rows]
+  #
+#
+
+
 class SqliteStorage(Storage):
   # everything in one SQLite file
 
@@ -374,11 +427,12 @@ class SqliteStorage(Storage):
     self.maps = SqliteMapStore(self.db)
     self.playlist = SqlitePlaylistStore(self.db)
     self.moderation = SqliteModerationStore(self.db)
+    self.records = SqliteRecordStore(self.db)
   #
 
   async def open(self):
     await self.db.open()
-    for store in (self.players, self.maps, self.playlist, self.moderation):
+    for store in (self.players, self.maps, self.playlist, self.moderation, self.records):
       await store.migrate()
     #
   #

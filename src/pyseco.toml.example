@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, discord, flexitime, jukebox, welcome
+# plugins to load: ad, custom_votes, discord, flexitime, jukebox, local_records, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -54,8 +54,18 @@ leave = "{nickname}$z$s left the server."
 # time per map in minutes (time attack); the server's own time limit is switched off
 minutes = 60
 
+[local_records]
+# records per map
+max = 50
+# new records up to this rank are told to everybody (0: never)
+announce = 30
+# a player who improves without being announced is told privately
+tell_player = true
+# records in the widget: the top 3 and the ones around the player's own
+lines = 5
+
 # Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
-# corner. Names: flexitime (the clock, default x = 49, y = 32)
+# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5)
 #[widgets.flexitime]
 #x = 49
 #y = 32

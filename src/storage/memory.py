@@ -1,8 +1,8 @@
 import copy
 import datetime
 
-from storage.interfaces import (Ban, PlaylistStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
-  StoredPlayer)
+from storage.interfaces import (Ban, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap, Record,
+  RecordStore, Storage, StoredPlayer)
 
 
 # Keeps everything in memory, lost when pyseco stops. Useful for tests and as a template for new backends.
@@ -161,6 +161,40 @@ class MemoryModerationStore(ModerationStore):
 #
 
 
+class MemoryRecordStore(RecordStore):
+
+  def __init__(self, players):
+    self.players = players # MemoryPlayerStore, for the nicknames
+    self._records = {} # (uid, login) -> Record
+    self.order = 0 # who drove an equal time first
+    self.orders = {}
+  #
+
+  def _copy(self, record):
+    player = self.players.players.get(record.login)
+    return Record(record.login, (player.nickname if player else '') or record.login, record.time,
+      list(record.checkpoints), record.date)
+  #
+
+  async def best(self, uid, login):
+    record = self._records.get((uid, login))
+    return self._copy(record) if record else None
+  #
+
+  async def save(self, uid, login, time, checkpoints):
+    self._records[(uid, login)] = Record(login, '', time, list(checkpoints), now())
+    self.order += 1
+    self.orders[(uid, login)] = self.order
+  #
+
+  async def ranking(self, uid, limit):
+    keys = sorted((key for key in self._records if key[0] == uid),
+      key=lambda key: (self._records[key].time, self._records[key].date, self.orders[key]))
+    return [self._copy(self._records[key]) for key in keys[:limit]]
+  #
+#
+
+
 class MemoryStorage(Storage):
 
   def __init__(self):
@@ -168,6 +202,7 @@ class MemoryStorage(Storage):
     self.maps = MemoryMapStore()
     self.playlist = MemoryPlaylistStore()
     self.moderation = MemoryModerationStore()
+    self.records = MemoryRecordStore(self.players)
   #
 
   async def open(self):

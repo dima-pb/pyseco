@@ -14,6 +14,8 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `welcome`: greets players when they join, tells everybody who comes and goes
   - `flexitime`: the time limit of a map, kept by pyseco with a clock on screen; admins change it while the map
     is played (`/timeleft 30`, `/timeleft +10`, `/timeleft pause`)
+  - `local_records`: the best time of every player on every map, with the checkpoints of the run; a widget with
+    the top 3 and the records around your own, `/records` (a click on a record shows its checkpoints)
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
     `/jukebox` shows the wishes); rules: one wish per player, no recently played maps (operators and above: no limits)
 
@@ -63,7 +65,8 @@ Nobody can act on a player with the same or a higher role.
 - `src/services/`: always there, used by plugins: `accounts` (roles, discord links), `players` (who is online),
   `maps` (map list, current map, history), `chat` (messages to players), `ui` and `windows` (manialinks),
   `moderation` (kick, mute, ban), `playlist` (which map comes next: requests from the jukebox, votes, ... are
-  queued, temporary maps are removed after they were played; `/nextmap`, `/history`, `/addthis`)
+  queued, temporary maps are removed after they were played; `/nextmap`, `/history`, `/addthis`), `race`
+  (checkpoints and finishes of every run)
 - `src/storage/`: what pyseco keeps, see Data
 - `src/plugins/`: optional features, switched on in `pyseco.toml`
 
@@ -101,7 +104,8 @@ Handlers are `async` functions. Never block in a handler (no `time.sleep`, no sy
 everything shares one event loop.
 
 Events (`core/events.py`): `PLAYER_JOINED` / `PLAYER_LEFT` (a `Player`), `CHAT` (player and text, no commands),
-`MAP_STARTED` / `MAP_ENDED` (the map), `MAP_LIST_CHANGED`, `PLAYLIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
+`MAP_STARTED` / `MAP_ENDED` (the map), `MAP_LIST_CHANGED`, `PLAYLIST_CHANGED`, `CHECKPOINT`, `PLAYER_FINISHED`
+(with the checkpoints of the run), `SECOND_PASSED`. Raw server callbacks can be registered by their
 name (`'TrackMania.Echo'`, ...) and get the callback's parameters.
 
 ## Tests
