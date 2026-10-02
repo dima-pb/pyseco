@@ -2,11 +2,9 @@ import asyncio
 
 import discord
 
-import accounts
-import commands
-import log
+from core import commands, events, log, roles
+from core.text import strip_colors
 from plugins.plugin import Plugin
-import utilities
 
 
 MAX_MESSAGE_LENGTH = 2000 # discord limit
@@ -15,7 +13,7 @@ MAX_QUEUED_MESSAGES = 200
 
 def clean_name(name):
   # TM formatting codes removed, discord markdown (**, _, ...) neutralized
-  return discord.utils.escape_markdown(utilities.strip_colors(name or ''))
+  return discord.utils.escape_markdown(strip_colors(name or ''))
 #
 
 
@@ -54,18 +52,18 @@ class Discord(Plugin):
     self.ready = asyncio.Event() # set as soon as the channel is known
     self.outbox = asyncio.Queue(maxsize=MAX_QUEUED_MESSAGES)
 
-    self.controller.register_event('TrackMania.PlayerChat', self.chat_to_dc)
-    self.controller.register_event('PlayerConnectComplete', self.player_connect)
-    self.controller.register_event('PlayerDisconnectComplete', self.player_disconnect)
-    self.controller.register_event('TrackMania.BeginChallenge', self.new_challenge)
-    self.controller.register_event('TrackMania.Echo', self.echo)
+    controller.events.register(events.CHAT, self.chat_to_dc)
+    controller.events.register(events.PLAYER_JOINED, self.player_connect)
+    controller.events.register(events.PLAYER_LEFT, self.player_disconnect)
+    controller.events.register(events.MAP_STARTED, self.new_challenge)
+    controller.events.register('TrackMania.Echo', self.echo)
 
     register = controller.commands.register
     only_discord = (commands.DISCORD,)
     register('players', self.cmd_players, help='lists the players on the server', sources=only_discord)
-    register('skip', self.cmd_skip, role=accounts.ADMIN, help='skips to the next map', sources=only_discord,
+    register('skip', self.cmd_skip, role=roles.ADMIN, help='skips to the next map', sources=only_discord,
       aliases=('next',))
-    register('restart', self.cmd_restart, role=accounts.ADMIN, help='restarts the current map', sources=only_discord,
+    register('restart', self.cmd_restart, role=roles.ADMIN, help='restarts the current map', sources=only_discord,
       aliases=('res',))
     register('link', self.cmd_link, help='links your discord account to your TM login (get the code with /link in game)',
       usage='<code>', sources=only_discord)
@@ -137,33 +135,23 @@ class Discord(Plugin):
     #
   #
 
-  async def chat_to_dc(self, params):
-    if params[0] == 0: # server's own messages
-      return
-    #
-    if params[2].startswith('/'):
-      return
-    #
-
-    login = params[1]
-    player = await self.controller.get_player_by_login(login)
-    self.send('**' + clean_name(player.nickname) + '** [' + discord.utils.escape_markdown(login) + ']: '
-      + discord.utils.escape_markdown(params[2]))
+  def player_name(self, player):
+    return '**' + clean_name(player.nickname) + '** [' + discord.utils.escape_markdown(player.login) + ']'
   #
 
-  async def player_connect(self, login):
-    player = await self.controller.get_player_by_login(login)
-    self.send('**' + clean_name(player.nickname) + '** [' + discord.utils.escape_markdown(login) + '] connected. ('
-      + str(len(self.controller.players)) + ' online)')
+  async def chat_to_dc(self, message):
+    self.send(self.player_name(message.player) + ': ' + discord.utils.escape_markdown(message.text))
+  #
+
+  async def player_connect(self, player):
+    self.send(self.player_name(player) + ' connected. (' + str(self.controller.players.count()) + ' online)')
   #
 
   async def player_disconnect(self, player):
-    self.send('**' + clean_name(player.nickname) + '** [' + discord.utils.escape_markdown(player.login)
-      + '] disconnected. (' + str(len(self.controller.players)) + ' online)')
+    self.send(self.player_name(player) + ' disconnected. (' + str(self.controller.players.count()) + ' online)')
   #
 
-  async def new_challenge(self, params):
-    map = params[0]
+  async def new_challenge(self, map):
     self.send('Switching to map **' + clean_name(map['Name']) + '** by **' + clean_name(map['Author']) + '**')
   #
 
@@ -176,8 +164,9 @@ class Discord(Plugin):
       return
     #
     place, time, login = vals
-    player = await self.controller.get_player_by_login(login)
-    self.send('**' + clean_name(player.nickname) + '** [' + discord.utils.escape_markdown(login)
+    player = await self.controller.players.get(login)
+    nickname = player.nickname if player else login
+    self.send('**' + clean_name(nickname) + '** [' + discord.utils.escape_markdown(login)
       + '] gained Dedimania place **' + place + '** with a time of **' + time + '**')
   #
 
@@ -211,7 +200,7 @@ class Discord(Plugin):
 
     nick = message.author.display_name.replace('$', '$$')
     link = '$l[' + self.invite + ']discord$l' if self.invite else 'discord'
-    await self.controller.chat_send_server_message('[' + nick + '@' + link + '] $z$s' + text)
+    await self.controller.chat.send_raw('[' + nick + '@' + link + '] $z$s' + text)
   #
 
   async def run_command(self, message, text):
@@ -220,7 +209,7 @@ class Discord(Plugin):
       return
     #
     login = await self.controller.accounts.login_for_discord(message.author.id)
-    role = await self.controller.accounts.role(login) if login else accounts.PLAYER
+    role = await self.controller.accounts.role(login) if login else roles.PLAYER
     ctx = commands.Context(commands.DISCORD, login, message.author.display_name, role, words[1:],
       self.reply, discord_id=message.author.id)
     if not await self.controller.commands.run(ctx, words[0]):
@@ -230,7 +219,7 @@ class Discord(Plugin):
 
   async def reply(self, text):
     # command answers may contain TM formatting (nicknames), discord shows them plain
-    self.send(utilities.strip_colors(text))
+    self.send(strip_colors(text))
   #
 
   def discord_user_ingame(self, ctx):
@@ -239,24 +228,20 @@ class Discord(Plugin):
   #
 
   async def cmd_players(self, ctx):
-    players = await self.controller.get_player_list()
-    if players is None:
-      await ctx.reply('Could not get the player list from the server.')
-      return
-    #
+    players = await self.controller.server.get_player_list(300, 0)
     lines = [str(len(players)) + ' playing.']
     lines += [clean_name(p['NickName']) + ' [' + discord.utils.escape_markdown(p['Login']) + ']' for p in players]
     await ctx.reply('\n'.join(lines))
   #
 
   async def cmd_skip(self, ctx):
-    await self.controller.chat_send_server_message(self.discord_user_ingame(ctx) + ' skipped the map.')
-    await self.controller.next_challenge()
+    await self.controller.chat.send_raw(self.discord_user_ingame(ctx) + ' skipped the map.')
+    await self.controller.server.next_challenge()
   #
 
   async def cmd_restart(self, ctx):
-    await self.controller.chat_send_server_message(self.discord_user_ingame(ctx) + ' restarted the map.')
-    await self.controller.restart()
+    await self.controller.chat.send_raw(self.discord_user_ingame(ctx) + ' restarted the map.')
+    await self.controller.server.challenge_restart()
   #
 
   async def cmd_link(self, ctx):
@@ -269,7 +254,7 @@ class Discord(Plugin):
       return
     #
     role = await self.controller.accounts.role(login)
-    await ctx.reply('Linked to ' + login + ' (' + accounts.ROLE_NAMES[role] + ').')
+    await ctx.reply('Linked to ' + login + ' (' + roles.NAMES[role] + ').')
   #
 
   async def cmd_unlink(self, ctx):
@@ -284,7 +269,7 @@ class Discord(Plugin):
     if ctx.login is None:
       await ctx.reply('Not linked. Type /link in game to get a code, then !link <code> here.')
     else:
-      await ctx.reply('Linked to ' + ctx.login + ' (' + accounts.ROLE_NAMES[ctx.role] + ').')
+      await ctx.reply('Linked to ' + ctx.login + ' (' + roles.NAMES[ctx.role] + ').')
     #
   #
 #

@@ -6,12 +6,11 @@ A controller for TMF Servers, written in python (asyncio).
 Supports rpc calls (though most are yet to be defined) and callbacks from the server.
 
 Supports plugins (I shamelessly stole the architecture for those from (x)aseco).
-Which plugins are loaded is set with `plugins=` in `src/pyseco.cfg`:
+Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `discord`: A discord bot that synchronises chat of a Trackmania server with a discord channel-chat.
   - `custom_votes`: A custom votes plugin that uses the native TMF voting engine. Currently only the usual replay and skip votes implemented,
     but more can very easily be added
   - `ad`: shows a clickable logo to every player that connects
-  - `echo`: example plugin, repeats the chat
   - `jukebox`: players wish the next maps (`/list`, `/jukebox <number>`, `/nextmap`, `/history`); temporary
     (TMX) maps are removed after they were played unless an admin keeps them with `/addthis`. Replaces XAseco's
     jukebox: with XAseco running, its `plugin.rasp_jukebox.php` is replaced by the bridge from tmf-docker
@@ -51,11 +50,21 @@ with `/setrole <login> <player|operator|admin>`. `/pyseco` lists the commands yo
 Discord commands (`!name`) use the role of the TM login the discord account is linked to:
 type `/link` in game, then `!link <code>` in the discord channel. `!help` lists them.
 
+## Structure
+- `src/core/`: the controller (`controller.py`), the server connection (`server.py`) with the server's methods
+  (`server_api.py`), events, commands, roles, settings, log
+- `src/services/`: always there, used by plugins: `accounts` (roles, discord links), `players` (who is online),
+  `maps` (map list, current map, history), `chat` (messages to players)
+- `src/storage/`: what pyseco keeps, see Data
+- `src/plugins/`: optional features, switched on in `pyseco.toml`
+
+Plugins use the core and the services, never each other. When two plugins need the same thing, it belongs into a service.
+
 ## Writing plugins
 Derive from `plugins.plugin.Plugin` and add the plugin to `AVAILABLE` in `src/plugins/plugins.py`. In `__init__`:
 - settings: `controller.settings('<plugin>')`, the plugin's section of `pyseco.toml` as dict
-- events: `controller.register_event(name, handler)`
-- commands: `controller.commands.register(name, handler, role=accounts.ADMIN, help=..., usage=...,
+- events: `controller.events.register(name, handler)`, names in `core/events.py` (see below)
+- commands: `controller.commands.register(name, handler, role=roles.ADMIN, help=..., usage=...,
   sources=(commands.GAME, commands.DISCORD))`; the handler gets a `commands.Context` (`ctx.login`, `ctx.args`,
   `await ctx.reply(text)`), raise `commands.UsageError` for wrong arguments
 - data: add a store interface for the plugin's data to `src/storage/interfaces.py` (and to `Storage`), implement
@@ -63,11 +72,20 @@ Derive from `plugins.plugin.Plugin` and add the plugin to `AVAILABLE` in `src/pl
   tests in `tests/test_storage.py`; the plugin uses `controller.storage.<store>`. In SQLite, never change a
   released migration script, append a new one
 
-Handlers are `async` functions; server requests are awaited, e.g. `await self.controller.call('GetChallengeList', 100, 0)`.
-Never block in a handler (no `time.sleep`, no synchronous network calls): everything shares one event loop.
+Anything that talks to the server or the network belongs into `async def start(self)`.
 
-Events: all server callbacks (`TrackMania.PlayerChat`, ...) plus `PlayerConnectComplete` (login),
-`PlayerDisconnectComplete` (player object) and `second_passed`.
+Server methods are typed: `await controller.server.choose_next_challenge(filename)`, `await
+controller.server.get_player_list(100, 0)`; errors of the server raise `xmlrpc.client.Fault`. They are generated
+from the dedicated server's `ListMethods.html` by `tools/gen_server_api.py` (parameter names and the returned
+structures are listed there). `controller.server.call('Method', ...)` reaches any method directly.
+Messages to players: `controller.chat.announce(text)`, `controller.chat.tell(login, text)`.
+
+Handlers are `async` functions. Never block in a handler (no `time.sleep`, no synchronous network calls):
+everything shares one event loop.
+
+Events (`core/events.py`): `PLAYER_JOINED` / `PLAYER_LEFT` (a `Player`), `CHAT` (player and text, no commands),
+`MAP_STARTED` (the map), `MAP_LIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
+name (`'TrackMania.Echo'`, ...) and get the callback's parameters.
 
 ## Tests
 ```sh

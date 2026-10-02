@@ -1,11 +1,9 @@
 import json
 import xmlrpc.client
 
-import accounts
-import commands
-import log
+from core import commands, events, log, roles
+from core.text import strip_colors
 from plugins.plugin import Plugin
-import utilities
 
 
 # Echo protocol with the XAseco side (xaseco addon plugin.rasp_jukebox.php, which stands in for RASP's jukebox):
@@ -31,7 +29,7 @@ class Entry:
 
   @staticmethod
   def from_map(m, login='', nickname='', source='Jukebox'):
-    return Entry(m['UId'], m['FileName'], m['Name'], m.get('Environment', ''), login, nickname, source)
+    return Entry(m['UId'], m['FileName'], m['Name'], m.get('Environnement', ''), login, nickname, source)
   #
 
   def for_xaseco(self, temporary):
@@ -61,9 +59,9 @@ class Jukebox(Plugin):
     self.temporary = {} # uid -> filename of maps to remove after they were played
     self.playing_temporary = None # uid of the temporary map being played
 
-    controller.register_event('MapStarted', self.map_started)
-    controller.register_event('TrackMania.ChallengeListModified', self.list_modified)
-    controller.register_event('TrackMania.Echo', self.echo)
+    controller.events.register(events.MAP_STARTED, self.map_started)
+    controller.events.register(events.MAP_LIST_CHANGED, self.list_changed)
+    controller.events.register('TrackMania.Echo', self.echo)
 
     register = controller.commands.register
     register('list', self.cmd_list, help='lists the maps on the server', usage='[page | search text]')
@@ -71,7 +69,7 @@ class Jukebox(Plugin):
       usage='[<number> | list | drop | drop <position> | clear]', aliases=('jb',))
     register('nextmap', self.cmd_nextmap, help='shows the next map')
     register('history', self.cmd_history, help='shows the recently played maps')
-    register('addthis', self.cmd_addthis, role=accounts.ADMIN, help='keeps the current temporary (TMX) map on the server')
+    register('addthis', self.cmd_addthis, role=roles.ADMIN, help='keeps the current temporary (TMX) map on the server')
   #
 
   async def start(self):
@@ -92,7 +90,7 @@ class Jukebox(Plugin):
   #
 
   async def announce(self, text):
-    await self.controller.chat_send_server_message('$fb0»$z$s ' + text)
+    await self.controller.chat.announce(text)
   #
 
 
@@ -104,7 +102,7 @@ class Jukebox(Plugin):
       await reply('This map is already in the jukebox.')
       return False
     #
-    if role < accounts.OPERATOR:
+    if role < roles.OPERATOR:
       if entry.login and sum(1 for e in self.queue if e.login == entry.login) >= self.per_player:
         await reply('You already have a map in the jukebox (/jukebox drop removes it).')
         return False
@@ -118,7 +116,7 @@ class Jukebox(Plugin):
     if entry.uid not in self.controller.maps.by_uid:
       # a new file (TMX): the server has to take it into its list first
       try:
-        await self.controller.call('AddChallenge', entry.filename)
+        await self.controller.server.add_challenge(entry.filename)
       except xmlrpc.client.Fault as fault:
         await reply('The server did not accept the map: ' + fault.faultString)
         return False
@@ -126,7 +124,7 @@ class Jukebox(Plugin):
       await self.controller.maps.refresh()
     #
     try:
-      await self.controller.call('CheckChallengeForCurrentServerParams', entry.filename)
+      await self.controller.server.check_challenge_for_current_server_params(entry.filename)
     except xmlrpc.client.Fault as fault:
       await reply('The map does not fit the server settings: ' + fault.faultString)
       return False
@@ -141,8 +139,8 @@ class Jukebox(Plugin):
       self.queue.append(entry)
     #
     await self.changed()
-    who = utilities.strip_colors(entry.nickname) if entry.nickname else entry.source
-    await self.announce('$fff' + utilities.strip_colors(entry.name) + '$z$s was added to the jukebox by $fff' + who + '$z$s.')
+    who = strip_colors(entry.nickname) if entry.nickname else entry.source
+    await self.announce('$fff' + strip_colors(entry.name) + '$z$s was added to the jukebox by $fff' + who + '$z$s.')
     return True
   #
 
@@ -168,12 +166,12 @@ class Jukebox(Plugin):
     while self.queue:
       entry = self.queue[0]
       try:
-        await self.controller.call('ChooseNextChallenge', entry.filename)
+        await self.controller.server.choose_next_challenge(entry.filename)
         return
       except xmlrpc.client.Fault as fault:
         self.queue.pop(0)
         self.log('Dropped ' + entry.filename + ' from the jukebox: ' + fault.faultString, log.LOG_WARNING)
-        await self.announce('$fff' + utilities.strip_colors(entry.name) + '$z$s was dropped from the jukebox, '
+        await self.announce('$fff' + strip_colors(entry.name) + '$z$s was dropped from the jukebox, '
           'the server can\'t play it.')
       #
     #
@@ -199,16 +197,15 @@ class Jukebox(Plugin):
     filename = self.temporary.pop(uid)
     await self.store.remove_temporary(uid)
     try:
-      await self.controller.call('RemoveChallenge', filename)
+      await self.controller.server.remove_challenge(filename)
     except xmlrpc.client.Fault as fault:
       self.log('Could not remove ' + filename + ': ' + fault.faultString, log.LOG_WARNING)
     #
   #
 
-  async def list_modified(self, params):
-    if params[2]: # maps were added or removed, the next index may have moved
-      await self.apply_next()
-    #
+  async def list_changed(self, _):
+    # maps were added or removed, the next index may have moved
+    await self.apply_next()
   #
 
 
@@ -219,7 +216,7 @@ class Jukebox(Plugin):
     history = list(reversed(await self.controller.maps.recent_uids(20)))
     state = {'queue': [e.for_xaseco(e.uid in self.temporary) for e in self.queue], 'history': history}
     try:
-      await self.controller.call('Echo', TO_XASECO + '|' + json.dumps(state), TO_XASECO)
+      await self.controller.server.echo(TO_XASECO + '|' + json.dumps(state), TO_XASECO)
     except xmlrpc.client.Fault as fault:
       self.log('Could not publish the jukebox: ' + fault.faultString, log.LOG_WARNING)
     #
@@ -233,8 +230,8 @@ class Jukebox(Plugin):
     action = request.get('action')
     login = request.get('login') or ''
     # XAseco checked its own admin rights already
-    role = max(await self.controller.accounts.role(login or None), accounts.ADMIN if request.get('admin') else accounts.PLAYER)
-    reply = (lambda text: self.controller.chat_to(login, text)) if login else self.no_reply
+    role = max(await self.controller.accounts.role(login or None), roles.ADMIN if request.get('admin') else roles.PLAYER)
+    reply = (lambda text: self.controller.chat.tell(login, text)) if login else self.no_reply
     if action == 'hello':
       await self.publish()
     elif action == 'add':
@@ -248,12 +245,12 @@ class Jukebox(Plugin):
       #
     elif action == 'drop':
       index = next((i for i, e in enumerate(self.queue) if e.uid == request.get('uid')), None)
-      if index is not None and (role >= accounts.OPERATOR or self.queue[index].login == login):
+      if index is not None and (role >= roles.OPERATOR or self.queue[index].login == login):
         await self.remove(index)
       else:
         await self.publish()
       #
-    elif action == 'clear' and role >= accounts.ADMIN:
+    elif action == 'clear' and role >= roles.ADMIN:
       await self.clear()
     else:
       await self.publish()
@@ -268,7 +265,7 @@ class Jukebox(Plugin):
   # ---- commands ----
 
   def map_line(self, index, m):
-    return str(index + 1) + '. $fff' + utilities.strip_colors(m['Name']) + '$z$s by ' + (m.get('Author') or '?')
+    return str(index + 1) + '. $fff' + strip_colors(m['Name']) + '$z$s by ' + (m.get('Author') or '?')
   #
 
   async def cmd_list(self, ctx):
@@ -278,7 +275,7 @@ class Jukebox(Plugin):
       page = int(ctx.args[0])
     elif ctx.args:
       words = [w.lower() for w in ctx.args]
-      maps = [(i, m) for i, m in maps if all(w in (utilities.strip_colors(m['Name']) + ' ' + m.get('Author', '')).lower()
+      maps = [(i, m) for i, m in maps if all(w in (strip_colors(m['Name']) + ' ' + m.get('Author', '')).lower()
         for w in words)]
       if not maps:
         await ctx.reply('No map matches "' + ' '.join(ctx.args) + '".')
@@ -303,8 +300,8 @@ class Jukebox(Plugin):
         await ctx.reply('The jukebox is empty.')
       #
       for i, e in enumerate(self.queue):
-        await ctx.reply(str(i + 1) + '. $fff' + utilities.strip_colors(e.name) + '$z$s ('
-          + (utilities.strip_colors(e.nickname) or e.source) + ')')
+        await ctx.reply(str(i + 1) + '. $fff' + strip_colors(e.name) + '$z$s ('
+          + (strip_colors(e.nickname) or e.source) + ')')
       #
     elif args[0].isdigit() and len(args) == 1:
       if ctx.login is None:
@@ -316,7 +313,7 @@ class Jukebox(Plugin):
         await ctx.reply('There is no map ' + args[0] + ', see /list.')
         return
       #
-      player = self.controller.players.get(ctx.login)
+      player = self.controller.players.online.get(ctx.login)
       nickname = player.nickname if player else ctx.display_name
       entry = Entry.from_map(self.controller.maps.list[number - 1], ctx.login, nickname)
       await self.add(entry, ctx.role, ctx.reply)
@@ -326,17 +323,17 @@ class Jukebox(Plugin):
         await ctx.reply('You have no map in the jukebox.')
       else:
         entry = await self.remove(index)
-        await ctx.reply('Removed ' + utilities.strip_colors(entry.name) + ' from the jukebox.')
+        await ctx.reply('Removed ' + strip_colors(entry.name) + ' from the jukebox.')
       #
-    elif args[0] == 'drop' and len(args) == 2 and args[1].isdigit() and ctx.role >= accounts.OPERATOR:
+    elif args[0] == 'drop' and len(args) == 2 and args[1].isdigit() and ctx.role >= roles.OPERATOR:
       position = int(args[1])
       if not 1 <= position <= len(self.queue):
         await ctx.reply('The jukebox has no position ' + args[1] + '.')
         return
       #
       entry = await self.remove(position - 1)
-      await self.announce('$fff' + utilities.strip_colors(entry.name) + '$z$s was removed from the jukebox.')
-    elif args == ['clear'] and ctx.role >= accounts.ADMIN:
+      await self.announce('$fff' + strip_colors(entry.name) + '$z$s was removed from the jukebox.')
+    elif args == ['clear'] and ctx.role >= roles.ADMIN:
       await self.clear()
       await self.announce('The jukebox was cleared.')
     else:
@@ -347,12 +344,12 @@ class Jukebox(Plugin):
   async def cmd_nextmap(self, ctx):
     if self.queue:
       e = self.queue[0]
-      await ctx.reply('Next map: $fff' + utilities.strip_colors(e.name) + '$z$s (jukebox: '
-        + (utilities.strip_colors(e.nickname) or e.source) + ')')
+      await ctx.reply('Next map: $fff' + strip_colors(e.name) + '$z$s (jukebox: '
+        + (strip_colors(e.nickname) or e.source) + ')')
       return
     #
-    m = await self.controller.call('GetNextChallengeInfo')
-    await ctx.reply('Next map: $fff' + utilities.strip_colors(m['Name']) + '$z$s')
+    m = await self.controller.server.get_next_challenge_info()
+    await ctx.reply('Next map: $fff' + strip_colors(m['Name']) + '$z$s')
   #
 
   async def cmd_history(self, ctx):
@@ -362,7 +359,7 @@ class Jukebox(Plugin):
       return
     #
     for i, (uid, name, played_at) in enumerate(history[1:]):
-      await ctx.reply(str(i + 1) + '. $fff' + utilities.strip_colors(name) + '$z$s (' + played_at + ')')
+      await ctx.reply(str(i + 1) + '. $fff' + strip_colors(name) + '$z$s (' + played_at + ')')
     #
   #
 
@@ -376,7 +373,7 @@ class Jukebox(Plugin):
     self.playing_temporary = None
     await self.store.remove_temporary(current['UId'])
     await self.publish()
-    await ctx.reply('$fff' + utilities.strip_colors(current['Name']) + '$z$s stays on the server. '
+    await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server. '
       'To keep it after a server restart, save the map list (/admin writetracklist).')
   #
 #

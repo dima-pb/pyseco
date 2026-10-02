@@ -1,14 +1,8 @@
 import secrets
 import time
 
+from core.roles import ADMIN, MASTERADMIN, OPERATOR, PLAYER
 
-# roles, higher includes lower
-PLAYER = 0
-OPERATOR = 1
-ADMIN = 2
-MASTERADMIN = 3
-ROLE_NAMES = {PLAYER: 'player', OPERATOR: 'operator', ADMIN: 'admin', MASTERADMIN: 'masteradmin'}
-ROLES_BY_NAME = {name: role for role, name in ROLE_NAMES.items()}
 
 LINK_CODE_SECONDS = 600
 

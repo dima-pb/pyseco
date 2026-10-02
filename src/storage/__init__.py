@@ -5,7 +5,7 @@
 #   backend = "memory"   nothing is kept when pyseco stops (tests)
 
 
-from config import STORAGE_BACKENDS as BACKENDS
+from core.config import STORAGE_BACKENDS as BACKENDS
 
 
 def create(config):

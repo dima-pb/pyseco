@@ -19,9 +19,11 @@ class FakeServer:
     self.current = 0
     self.next = 1
     self.refuse = set() # file names CheckChallengeForCurrentServerParams refuses
+    self.players = {} # login -> PlayerInfo of the players on the server
     self.handlers = {
       'Authenticate': self.authenticate,
-      'GetPlayerList': lambda *args: [],
+      'GetPlayerList': lambda *args: [dict(p) for p in self.players.values()],
+      'GetPlayerInfo': self.player_info,
       'GetChallengeList': lambda count, start: [dict(m) for m in self.maps[start:start + count]],
       'GetCurrentChallengeInfo': lambda: dict(self.maps[self.current]),
       'GetNextChallengeInfo': lambda: dict(self.maps[self.next]),
@@ -57,10 +59,17 @@ class FakeServer:
     return True
   #
 
+  def player_info(self, login, version=1):
+    if login not in self.players:
+      raise xmlrpc.client.Fault(-1000, 'Login unknown.')
+    #
+    return dict(self.players[login])
+  #
+
   @staticmethod
   def make_map(i, prefix='Map'):
     return {'UId': 'uid' + str(i), 'Name': '$f00' + prefix + ' ' + str(i), 'FileName': 'Challenges\\' + prefix + str(i) + '.Challenge.Gbx',
-      'Author': 'author' + str(i), 'Environment': 'Stadium', 'GoldTime': 30000, 'CopperPrice': 100}
+      'Author': 'author' + str(i), 'Environnement': 'Stadium', 'GoldTime': 30000, 'CopperPrice': 100}
   #
 
   def index(self, filename):

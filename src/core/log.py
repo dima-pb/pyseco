@@ -1,8 +1,6 @@
 import datetime
 import os
 
-import config
-
 
 LOG_ALL = 0
 LOG_VERBOSE = 1

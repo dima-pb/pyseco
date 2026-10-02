@@ -1,6 +1,6 @@
 import xmlrpc.client
 
-import log
+from core import events, log
 
 
 MAX_MAPS = 5000
@@ -8,29 +8,29 @@ MAX_MAPS = 5000
 
 class Maps:
   # The server's map list, the current map and which maps were played when.
-  # Map dicts are the server's SChallengeInfo: UId, Name, FileName, Author, Environment, ...
+  # Maps are the server's dicts, see core.server_api.ChallengeInfo.
 
   def __init__(self, controller):
     self.controller = controller
     self.list = [] # in the server's order
     self.by_uid = {}
     self.current = None
-    controller.register_event('TrackMania.BeginChallenge', self.begin_challenge)
-    controller.register_event('TrackMania.ChallengeListModified', self.list_modified)
+    controller.events.register('TrackMania.BeginChallenge', self.begin_challenge)
+    controller.events.register('TrackMania.ChallengeListModified', self.list_modified)
   #
 
   async def start(self):
     # while the server is still loading it has no map yet: BeginChallenge / ChallengeListModified will tell
     try:
       await self.refresh()
-      self.current = await self.controller.call('GetCurrentChallengeInfo')
+      self.current = await self.controller.server.get_current_challenge_info()
     except xmlrpc.client.Fault as fault:
       self.controller.logger.message('Map list not available yet: ' + fault.faultString, log.LOG_INFO)
     #
   #
 
   async def refresh(self):
-    self.list = await self.controller.call('GetChallengeList', MAX_MAPS, 0)
+    self.list = await self.controller.server.get_challenge_list(MAX_MAPS, 0)
     self.by_uid = {m['UId']: m for m in self.list}
     await self.controller.storage.maps.known(self.list)
   #
@@ -38,6 +38,7 @@ class Maps:
   async def list_modified(self, params):
     if params[2]: # IsListModified
       await self.refresh()
+      await self.controller.events.emit(events.MAP_LIST_CHANGED)
     #
   #
 
@@ -48,7 +49,7 @@ class Maps:
     self.current = params[0]
     await self.controller.storage.maps.known([self.current])
     await self.controller.storage.maps.played(self.current['UId'])
-    await self.controller.raise_event('MapStarted', self.current)
+    await self.controller.events.emit(events.MAP_STARTED, self.current)
   #
 
   async def history(self, count):

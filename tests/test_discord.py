@@ -1,7 +1,7 @@
 import asyncio
 import types
 
-import accounts
+from core import roles
 from conftest import Harness
 
 DISCORD_CONFIG = '[discord]\ntoken = "test"\nchannel_id = 123\ninvite = "discord.gg/test"\n'

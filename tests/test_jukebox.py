@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 
-import accounts
+from core import roles
 from conftest import Harness
 
 PLUGINS = ('jukebox', 'custom_votes')
@@ -68,7 +68,7 @@ def test_jukebox_sets_next_map_and_follows_the_rules(tmp_path):
       # map 4 was just played: players can't wish it, operators can
       await h.chat('bob', '/jb 4')
       assert 'played recently' in h.replies_to('bob')[-1]
-      await h.controller.accounts.set_role('op', accounts.OPERATOR)
+      await h.controller.accounts.set_role('op', roles.OPERATOR)
       await h.chat('op', '/jb 4')
       await h.chat('op', '/jb 2') # operators have no limit
       assert await queue_uids(h) == ['uid5', 'uid4', 'uid2']
@@ -137,7 +137,7 @@ def test_temporary_maps_are_removed_after_they_were_played(tmp_path):
       jukebox = h.plugin('jukebox')
       from plugins.jukebox import Entry
       new = Entry('uid-Challenges\\TMX\\7.Challenge.Gbx', 'Challenges\\TMX\\7.Challenge.Gbx', 'TMX 7', source='TMX')
-      assert await jukebox.add(new, accounts.ADMIN, jukebox.no_reply, temporary=True)
+      assert await jukebox.add(new, roles.ADMIN, jukebox.no_reply, temporary=True)
       assert h.server.called('AddChallenge') == [('Challenges\\TMX\\7.Challenge.Gbx',)]
       await h.server.play_next() # the TMX map
       await h.settle()
@@ -149,7 +149,7 @@ def test_temporary_maps_are_removed_after_they_were_played(tmp_path):
 
       # kept with /addthis
       other = Entry('uid-Challenges\\TMX\\8.Challenge.Gbx', 'Challenges\\TMX\\8.Challenge.Gbx', 'TMX 8', source='TMX')
-      await jukebox.add(other, accounts.ADMIN, jukebox.no_reply, temporary=True)
+      await jukebox.add(other, roles.ADMIN, jukebox.no_reply, temporary=True)
       await h.server.play_next()
       await h.settle()
       await h.chat('bob', '/addthis')

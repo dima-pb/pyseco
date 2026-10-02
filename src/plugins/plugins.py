@@ -1,7 +1,7 @@
 import importlib
 import traceback
 
-import log
+from core import log
 
 
 # plugin name (as used in pyseco.toml) -> module, class
@@ -9,7 +9,6 @@ AVAILABLE = {
   'ad': ('plugins.ad', 'Ad'),
   'custom_votes': ('plugins.custom_votes', 'CustomVote'),
   'discord': ('plugins.discord', 'Discord'),
-  'echo': ('plugins.echo', 'Echo'),
   'jukebox': ('plugins.jukebox', 'Jukebox'),
 }
 

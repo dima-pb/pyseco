@@ -33,8 +33,3 @@ def strip_colors(val):
     val = val_new
   #
 #
-
-
-
-
-

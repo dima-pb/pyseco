@@ -1,7 +1,6 @@
 import traceback
 
-import accounts
-import log
+from core import log, roles
 
 
 GAME = 'game'
@@ -52,9 +51,11 @@ class Commands:
     self.logger = logger
     # source -> name or alias -> Command; the same name may mean different commands in game and on discord
     self.commands = {GAME: {}, DISCORD: {}}
+    self.register('pyseco', self.cmd_help, help='lists the pyseco commands you can use', sources=(GAME,))
+    self.register('help', self.cmd_help, help='lists the commands you can use', sources=(DISCORD,))
   #
 
-  def register(self, name, handler, role=accounts.PLAYER, help='', usage='', sources=(GAME, DISCORD), aliases=()):
+  def register(self, name, handler, role=roles.PLAYER, help='', usage='', sources=(GAME, DISCORD), aliases=()):
     command = Command(name, handler, role, help, usage, tuple(sources))
     for source in command.sources:
       for key in (name,) + tuple(aliases):
@@ -79,7 +80,7 @@ class Commands:
       return False
     #
     if ctx.role < command.role:
-      await ctx.reply('You need to be ' + accounts.ROLE_NAMES[command.role] + ' to use this command.')
+      await ctx.reply('You need to be ' + roles.NAMES[command.role] + ' to use this command.')
       return True
     #
     try:
@@ -93,5 +94,18 @@ class Commands:
       await ctx.reply('The command failed, see the pyseco log.')
     #
     return True
+  #
+
+  async def cmd_help(self, ctx):
+    prefix = '/' if ctx.source == GAME else '!'
+    lines = [prefix + c.name + (' ' + c.usage if c.usage else '') + ' - ' + c.help for c in self.available(ctx.role, ctx.source)]
+    if ctx.source == GAME:
+      # the game chat shows only a few lines at once, so one command per message
+      for line in lines:
+        await ctx.reply(line)
+      #
+    else:
+      await ctx.reply('\n'.join(lines))
+    #
   #
 #

@@ -5,9 +5,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import config
-import log
-import pyseco
+from core import config, log
+from core.controller import Controller
 from fake_server import FakeServer
 
 
@@ -38,7 +37,7 @@ class Harness:
     self.server.connected.clear()
     await self.server.start()
     cfg = config.Config(write_config(self.tmp_path, self.server.port, self.extra_config, self.plugins))
-    self.controller = pyseco.TMController(cfg, log.Logging(cfg.log_path, cfg.log_level))
+    self.controller = Controller(cfg, log.Logging(cfg.log_path, cfg.log_level))
     self.task = asyncio.create_task(self.controller.run())
     await asyncio.wait_for(self.server.connected.wait(), 5)
     await self.settle()
