@@ -9,7 +9,9 @@ AVAILABLE = {
   'ad': ('plugins.ad', 'Ad'),
   'custom_votes': ('plugins.custom_votes', 'CustomVote'),
   'discord': ('plugins.discord', 'Discord'),
+  'flexitime': ('plugins.flexitime', 'Flexitime'),
   'jukebox': ('plugins.jukebox', 'Jukebox'),
+  'welcome': ('plugins.welcome', 'Welcome'),
 }
 
 

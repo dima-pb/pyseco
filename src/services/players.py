@@ -63,6 +63,16 @@ class Players:
     return len(self.online)
   #
 
+  def find(self, text):
+    # online players by login, or by a part of login or nickname (without colors), case does not matter;
+    # an exact login wins: [Player], empty if nobody matches
+    if text in self.online:
+      return [self.online[text]]
+    #
+    text = text.lower()
+    return [p for p in self.online.values() if text in p.login.lower() or text in strip_colors(p.nickname).lower()]
+  #
+
   async def get(self, login):
     # the online player; asks the server if pyseco doesn't know the player (yet), None if not on the server
     player = self.online.get(login)

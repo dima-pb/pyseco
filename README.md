@@ -11,6 +11,9 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `custom_votes`: A custom votes plugin that uses the native TMF voting engine. Currently only the usual replay and skip votes implemented,
     but more can very easily be added
   - `ad`: shows a clickable logo to every player that connects
+  - `welcome`: greets players when they join, tells everybody who comes and goes
+  - `flexitime`: the time limit of a map, kept by pyseco with a clock on screen; admins change it while the map
+    is played (`/timeleft 30`, `/timeleft +10`, `/timeleft pause`)
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
     `/nextmap`, `/history`); temporary
     (TMX) maps are removed after they were played unless an admin keeps them with `/addthis`. Replaces XAseco's
@@ -51,11 +54,18 @@ with `/setrole <login> <player|operator|admin>`. `/pyseco` lists the commands yo
 Discord commands (`!name`) use the role of the TM login the discord account is linked to:
 type `/link` in game, then `!link <code>` in the discord channel. `!help` lists them.
 
+## Moderation
+Always there: `/players` (window; for operators and above a click on a player offers kick, mute, ban), `/kick`,
+`/mute`, `/unmute` (operators), `/ban <player> [30m|2h|7d] [reason]`, `/unban`, `/bans` (admins). A player is
+found by login or by a part of login or nickname. Bans and mutes are kept and enforced when a player connects.
+Nobody can act on a player with the same or a higher role.
+
 ## Structure
 - `src/core/`: the controller (`controller.py`), the server connection (`server.py`) with the server's methods
   (`server_api.py`), events, commands, roles, settings, log
 - `src/services/`: always there, used by plugins: `accounts` (roles, discord links), `players` (who is online),
-  `maps` (map list, current map, history), `chat` (messages to players), `ui` and `windows` (manialinks)
+  `maps` (map list, current map, history), `chat` (messages to players), `ui` and `windows` (manialinks),
+  `moderation` (kick, mute, ban)
 - `src/storage/`: what pyseco keeps, see Data
 - `src/plugins/`: optional features, switched on in `pyseco.toml`
 
@@ -84,7 +94,8 @@ Messages to players: `controller.chat.announce(text)`, `controller.chat.tell(log
 UI (`services/windows.py`), created in `__init__`:
 - `ListWindow(controller.ui, columns=[...])`, then `await window.open(login, title, rows, on_click)`: a window
   with a paged list, every player has their own; `on_click(login, index)` makes the rows clickable
-- `TextWidget(controller.ui, x, y)`, then `await widget.show(text, login=None)`: text at a fixed place
+- `TextWidget(controller.ui, name, x, y)`, then `await widget.show(text, login=None)`: text at a fixed place;
+  server owners can move it with `[widgets.<name>]` (`x`, `y`) in `pyseco.toml`
 - anything else: `controller.ui.manialink_id()`, `controller.ui.actions(count, handler)` and
   `await controller.ui.show(id, xml, login)` with the helpers in `services/ui.py`
 
@@ -92,7 +103,7 @@ Handlers are `async` functions. Never block in a handler (no `time.sleep`, no sy
 everything shares one event loop.
 
 Events (`core/events.py`): `PLAYER_JOINED` / `PLAYER_LEFT` (a `Player`), `CHAT` (player and text, no commands),
-`MAP_STARTED` (the map), `MAP_LIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
+`MAP_STARTED` / `MAP_ENDED` (the map), `MAP_LIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
 name (`'TrackMania.Echo'`, ...) and get the callback's parameters.
 
 ## Tests

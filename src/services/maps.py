@@ -17,6 +17,7 @@ class Maps:
     self.current = None
     controller.events.register('TrackMania.BeginChallenge', self.begin_challenge)
     controller.events.register('TrackMania.ChallengeListModified', self.list_modified)
+    controller.events.register('TrackMania.EndChallenge', self.end_challenge)
   #
 
   async def start(self):
@@ -50,6 +51,11 @@ class Maps:
     await self.controller.storage.maps.known([self.current])
     await self.controller.storage.maps.played(self.current['UId'])
     await self.controller.events.emit(events.MAP_STARTED, self.current)
+  #
+
+  async def end_challenge(self, params):
+    # params: rankings, map, was warm-up, match continues, restart
+    await self.controller.events.emit(events.MAP_ENDED, params[1])
   #
 
   async def history(self, count):

@@ -162,3 +162,38 @@ def test_failed_migration_changes_nothing(tmp_path):
   #
   asyncio.run(scenario())
 #
+
+
+def test_bans_and_mutes(make_storage):
+  async def scenario(s):
+    assert await s.moderation.ban_of('bob') is None
+    await s.moderation.ban('bob', 'cheating', 'master', None)
+    await s.moderation.ban('old', '', 'master', '2000-01-01 00:00:00') # expired
+    await s.moderation.ban('later', 'spam', 'admin', '2999-01-01 00:00:00')
+    ban = await s.moderation.ban_of('bob')
+    assert (ban.reason, ban.by, ban.until) == ('cheating', 'master', None) and len(ban.created) == 19
+    assert await s.moderation.ban_of('old') is None
+    assert sorted(b.login for b in await s.moderation.bans()) == ['bob', 'later']
+    await s.moderation.ban('bob', 'again', 'admin', None) # replaces
+    assert (await s.moderation.ban_of('bob')).reason == 'again'
+    assert await s.moderation.unban('bob') and not await s.moderation.unban('bob')
+    assert await s.moderation.unban('old') # expired bans can be removed too
+
+    await s.moderation.mute('loud', 'op')
+    assert await s.moderation.muted() == {'loud'}
+    assert await s.moderation.unmute('loud') and not await s.moderation.unmute('loud')
+    assert await s.moderation.muted() == set()
+  #
+  with_storage(make_storage, scenario)
+#
+
+
+def test_visits_are_counted(make_storage):
+  async def scenario(s):
+    await s.players.seen('bob', 'Bob', True)
+    await s.players.seen('bob', 'Bob', False)
+    await s.players.seen('bob', 'Bob', True)
+    assert (await s.players.get('bob')).visits == 2
+  #
+  with_storage(make_storage, scenario)
+#

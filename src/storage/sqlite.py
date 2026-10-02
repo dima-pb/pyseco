@@ -2,7 +2,8 @@ import asyncio
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-from storage.interfaces import JukeboxStore, MapStore, Play, PlayerStore, QueuedMap, Storage, StoredPlayer
+from storage.interfaces import (Ban, JukeboxStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
+  StoredPlayer)
 
 
 class Database:
@@ -157,13 +158,13 @@ class SqlitePlayerStore(PlayerStore):
   #
 
   async def get(self, login):
-    row = await self.db.fetchone('SELECT login, nickname, role FROM players WHERE login = ?', (login,))
-    return StoredPlayer(row['login'], row['nickname'], row['role']) if row else None
+    row = await self.db.fetchone('SELECT login, nickname, role, visits FROM players WHERE login = ?', (login,))
+    return StoredPlayer(row['login'], row['nickname'], row['role'], row['visits']) if row else None
   #
 
   async def with_role(self):
-    rows = await self.db.fetchall('SELECT login, nickname, role FROM players WHERE role > 0')
-    return [StoredPlayer(r['login'], r['nickname'], r['role']) for r in rows]
+    rows = await self.db.fetchall('SELECT login, nickname, role, visits FROM players WHERE role > 0')
+    return [StoredPlayer(r['login'], r['nickname'], r['role'], r['visits']) for r in rows]
   #
 
   async def link_discord(self, discord_id, login):
@@ -221,7 +222,7 @@ class SqliteMapStore(MapStore):
   async def known(self, maps):
     await self.db.executemany(
       'INSERT OR IGNORE INTO maps (uid, name, author, environment) VALUES (?, ?, ?, ?)',
-      [(m['UId'], m['Name'], m.get('Author', ''), m.get('Environment', '')) for m in maps])
+      [(m['UId'], m['Name'], m.get('Author', ''), m.get('Environnement', '')) for m in maps])
   #
 
   async def played(self, uid):
@@ -298,6 +299,72 @@ class SqliteJukeboxStore(JukeboxStore):
 #
 
 
+# ---- moderation ----
+
+MODERATION_MIGRATIONS = [
+  # 1
+  '''
+  CREATE TABLE bans (
+    login TEXT PRIMARY KEY,
+    reason TEXT NOT NULL DEFAULT '',
+    by_login TEXT NOT NULL DEFAULT '',
+    until TEXT,
+    created TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE mutes (
+    login TEXT PRIMARY KEY,
+    by_login TEXT NOT NULL DEFAULT '',
+    created TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  ''',
+]
+
+
+class SqliteModerationStore(ModerationStore):
+
+  def __init__(self, db):
+    self.db = db
+  #
+
+  async def migrate(self):
+    await self.db.migrate('moderation', MODERATION_MIGRATIONS)
+  #
+
+  async def ban(self, login, reason, by, until):
+    await self.db.execute('INSERT OR REPLACE INTO bans (login, reason, by_login, until) VALUES (?, ?, ?, ?)',
+      (login, reason, by, until))
+  #
+
+  async def unban(self, login):
+    return (await self.db.execute('DELETE FROM bans WHERE login = ?', (login,))).rowcount > 0
+  #
+
+  async def ban_of(self, login):
+    row = await self.db.fetchone("SELECT * FROM bans WHERE login = ? AND (until IS NULL OR until > datetime('now'))",
+      (login,))
+    return Ban(row['login'], row['reason'], row['by_login'], row['until'], row['created']) if row else None
+  #
+
+  async def bans(self):
+    rows = await self.db.fetchall("SELECT * FROM bans WHERE until IS NULL OR until > datetime('now') "
+      'ORDER BY created DESC, login')
+    return [Ban(r['login'], r['reason'], r['by_login'], r['until'], r['created']) for r in rows]
+  #
+
+  async def mute(self, login, by):
+    await self.db.execute('INSERT OR REPLACE INTO mutes (login, by_login) VALUES (?, ?)', (login, by))
+  #
+
+  async def unmute(self, login):
+    return (await self.db.execute('DELETE FROM mutes WHERE login = ?', (login,))).rowcount > 0
+  #
+
+  async def muted(self):
+    return {r['login'] for r in await self.db.fetchall('SELECT login FROM mutes')}
+  #
+#
+
+
 class SqliteStorage(Storage):
   # everything in one SQLite file
 
@@ -306,11 +373,12 @@ class SqliteStorage(Storage):
     self.players = SqlitePlayerStore(self.db)
     self.maps = SqliteMapStore(self.db)
     self.jukebox = SqliteJukeboxStore(self.db)
+    self.moderation = SqliteModerationStore(self.db)
   #
 
   async def open(self):
     await self.db.open()
-    for store in (self.players, self.maps, self.jukebox):
+    for store in (self.players, self.maps, self.jukebox, self.moderation):
       await store.migrate()
     #
   #

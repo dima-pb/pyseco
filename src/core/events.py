@@ -10,6 +10,7 @@ PLAYER_JOINED = 'PlayerJoined'         # services.players.Player, after the serv
 PLAYER_LEFT = 'PlayerLeft'             # services.players.Player, no longer in players.online
 CHAT = 'Chat'                          # ChatMessage, chat of players that is not a /command
 MAP_STARTED = 'MapStarted'             # server_api.ChallengeInfo of the new map
+MAP_ENDED = 'MapEnded'                 # server_api.ChallengeInfo of the map that ended (the podium follows)
 MAP_LIST_CHANGED = 'MapListChanged'    # None; maps.list was reloaded after maps were added or removed
 SECOND_PASSED = 'SecondPassed'         # None
 

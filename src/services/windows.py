@@ -149,12 +149,18 @@ class ListWindow:
 
 class TextWidget:
   # Text at a fixed place on the screen, e.g. a clock:
-  #   widget = TextWidget(controller.ui, x=50, y=40)
+  #   widget = TextWidget(controller.ui, 'clock', x=50, y=40)
   #   await widget.show('12:00')            to everybody; show(text, login) to one player
-  # With background=False only the text is shown.
+  # x, y: top left corner, x -64 (left) .. 64 (right), y 48 (top) .. -48 (bottom). With background=False only
+  # the text is shown. Server owners can move a widget in pyseco.toml by its name:
+  #   [widgets.clock]
+  #   x = 40
+  #   y = 20
 
-  def __init__(self, ui, x, y, width=14, height=4, size=2, background=True):
+  def __init__(self, ui, name, x, y, width=14, height=4, size=2, background=True):
     self.ui = ui
+    place = ui.controller.settings('widgets').get(name, {})
+    x, y = float(place.get('x', x)), float(place.get('y', y))
     self.x, self.y, self.width, self.height, self.size = x, y, width, height, size
     self.background = background
     self.id = ui.manialink_id()

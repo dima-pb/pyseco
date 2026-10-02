@@ -1,7 +1,8 @@
 import copy
 import datetime
 
-from storage.interfaces import JukeboxStore, MapStore, Play, PlayerStore, QueuedMap, Storage, StoredPlayer
+from storage.interfaces import (Ban, JukeboxStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
+  StoredPlayer)
 
 
 # Keeps everything in memory, lost when pyseco stops. Useful for tests and as a template for new backends.
@@ -27,7 +28,9 @@ class MemoryPlayerStore(PlayerStore):
   #
 
   async def seen(self, login, nickname, visit):
-    self._player(login).nickname = nickname or ''
+    player = self._player(login)
+    player.nickname = nickname or ''
+    player.visits += 1 if visit else 0
   #
 
   async def role(self, login):
@@ -115,12 +118,56 @@ class MemoryJukeboxStore(JukeboxStore):
 #
 
 
+class MemoryModerationStore(ModerationStore):
+
+  def __init__(self):
+    self._bans = {} # login -> Ban
+    self._muted = set()
+  #
+
+  async def ban(self, login, reason, by, until):
+    self._bans[login] = Ban(login, reason, by, until, now())
+  #
+
+  async def unban(self, login):
+    return self._bans.pop(login, None) is not None
+  #
+
+  async def ban_of(self, login):
+    ban = self._bans.get(login)
+    return copy.copy(ban) if ban and (ban.until is None or ban.until > now()) else None
+  #
+
+  async def bans(self):
+    active = [copy.copy(b) for b in self._bans.values() if b.until is None or b.until > now()]
+    return sorted(sorted(active, key=lambda b: b.login), key=lambda b: b.created, reverse=True)
+  #
+
+  async def mute(self, login, by):
+    self._muted.add(login)
+  #
+
+  async def unmute(self, login):
+    if login not in self._muted:
+      return False
+    #
+    self._muted.discard(login)
+    return True
+  #
+
+  async def muted(self):
+    return set(self._muted)
+  #
+#
+
+
 class MemoryStorage(Storage):
 
   def __init__(self):
     self.players = MemoryPlayerStore()
     self.maps = MemoryMapStore()
     self.jukebox = MemoryJukeboxStore()
+    self.moderation = MemoryModerationStore()
   #
 
   async def open(self):

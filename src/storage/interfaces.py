@@ -13,6 +13,7 @@ class StoredPlayer:
   login: str
   nickname: str
   role: int
+  visits: int = 0
 #
 
 
@@ -21,6 +22,16 @@ class Play:
   uid: str
   name: str
   played_at: str # 'YYYY-MM-DD HH:MM:SS', UTC
+#
+
+
+@dataclass
+class Ban:
+  login: str
+  reason: str
+  by: str # login of who banned
+  until: str | None # 'YYYY-MM-DD HH:MM:SS', UTC; None: for ever
+  created: str
 #
 
 
@@ -92,7 +103,7 @@ class MapStore(ABC):
 
   @abstractmethod
   async def known(self, maps):
-    # remembers maps (dicts with UId, Name, Author, Environment as the server sends them); existing ones stay
+    # remembers maps (dicts with UId, Name, Author, Environnement as the server sends them); existing ones stay
     ...
   #
 
@@ -142,12 +153,59 @@ class JukeboxStore(ABC):
 #
 
 
+class ModerationStore(ABC):
+  # bans and mutes
+
+  @abstractmethod
+  async def ban(self, login, reason, by, until):
+    # until: 'YYYY-MM-DD HH:MM:SS' UTC or None for ever; banning again replaces the ban
+    ...
+  #
+
+  @abstractmethod
+  async def unban(self, login):
+    # True if there was a ban (also an expired one)
+    ...
+  #
+
+  @abstractmethod
+  async def ban_of(self, login):
+    # the Ban that is in force now, or None
+    ...
+  #
+
+  @abstractmethod
+  async def bans(self):
+    # [Ban] in force now, newest first
+    ...
+  #
+
+  @abstractmethod
+  async def mute(self, login, by):
+    ...
+  #
+
+  @abstractmethod
+  async def unmute(self, login):
+    # True if the login was muted
+    ...
+  #
+
+  @abstractmethod
+  async def muted(self):
+    # set of muted logins
+    ...
+  #
+#
+
+
 class Storage(ABC):
-  # one backend; players, maps, jukebox are its stores
+  # one backend; players, maps, jukebox, moderation are its stores
 
   players: PlayerStore
   maps: MapStore
   jukebox: JukeboxStore
+  moderation: ModerationStore
 
   @abstractmethod
   async def open(self):

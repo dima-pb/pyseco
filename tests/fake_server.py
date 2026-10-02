@@ -24,6 +24,7 @@ class FakeServer:
       'Authenticate': self.authenticate,
       'GetPlayerList': lambda *args: [dict(p) for p in self.players.values()],
       'GetPlayerInfo': self.player_info,
+      'Kick': self.kick,
       'GetChallengeList': lambda count, start: [dict(m) for m in self.maps[start:start + count]],
       'GetCurrentChallengeInfo': lambda: dict(self.maps[self.current]),
       'GetNextChallengeInfo': lambda: dict(self.maps[self.next]),
@@ -32,6 +33,10 @@ class FakeServer:
       'AddChallenge': self.add_map,
       'RemoveChallenge': self.remove_map,
       'Echo': self.echo,
+      'GetServerName': lambda: 'Fake Server',
+      'GetGameMode': lambda: 1, # time attack
+      'GetStatus': lambda: {'Code': 4, 'Name': 'Running - Play'},
+      'GetTimeAttackLimit': lambda: {'CurrentValue': 300000, 'NextValue': 300000},
     }
     self.writer = None
     self.connected = asyncio.Event()
@@ -64,6 +69,13 @@ class FakeServer:
       raise xmlrpc.client.Fault(-1000, 'Login unknown.')
     #
     return dict(self.players[login])
+  #
+
+  def kick(self, login, message=''):
+    # like the real server: the player is disconnected (a connecting player is not in self.players yet)
+    self.players.pop(login, None)
+    asyncio.get_running_loop().create_task(self.callback('TrackMania.PlayerDisconnect', login))
+    return True
   #
 
   @staticmethod
@@ -121,11 +133,16 @@ class FakeServer:
     return True
   #
 
-  async def play_next(self):
-    # the server switches to the next map: EndRace, then BeginChallenge of the next map
+  async def play_next(self, race=True):
+    # race=False: the map is loaded, the race has not started yet
+    # the server switches to the next map: EndChallenge, then BeginChallenge of the next map
+    await self.callback('TrackMania.EndChallenge', [], dict(self.maps[self.current]), False, False, False)
     self.current = self.next
     self.next = (self.current + 1) % len(self.maps)
     await self.callback('TrackMania.BeginChallenge', dict(self.maps[self.current]), False, False)
+    if race:
+      await self.callback('TrackMania.StatusChanged', 4, 'Running - Play')
+    #
   #
 
   def called(self, method):

@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, discord, echo, jukebox
+# plugins to load: ad, custom_votes, discord, flexitime, jukebox, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -43,3 +43,19 @@ per_player = 1
 # vote duration in ms and share of yes votes needed
 timeout = 30000
 ratio = 0.5
+
+[welcome]
+# "" switches a message off. Placeholders: {nickname} {login} {role} {visits} {visits_text} {server}
+message = "Welcome {nickname}$z$s to {server}$z$s! Type $fff/pyseco$z$s for the commands."
+join = "{nickname}$z$s joined the server ({visits_text})."
+leave = "{nickname}$z$s left the server."
+
+[flexitime]
+# time per map in minutes (time attack); the server's own time limit is switched off
+minutes = 60
+
+# Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
+# corner. Names: flexitime (the clock, default x = 49, y = 32)
+#[widgets.flexitime]
+#x = 49
+#y = 32

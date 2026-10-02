@@ -349,7 +349,7 @@ def test_windows_are_per_player_and_escape_text(tmp_path):
       await h.settle()
       assert not window.is_open('ann')
 
-      widget = TextWidget(h.controller.ui, 50, 40)
+      widget = TextWidget(h.controller.ui, 'test', 50, 40)
       await widget.show('12:00')
       xml = h.server.called('SendDisplayManialinkPage')[-1][0]
       assert '12:00' in xml and 'id="' + widget.id + '"' in xml

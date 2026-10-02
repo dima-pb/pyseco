@@ -24,11 +24,12 @@ def write_config(tmp_path, port, extra='', plugins=()):
 class Harness:
   # a controller connected to a FakeServer, running in the background
 
-  def __init__(self, tmp_path, extra_config='', plugins=(), server=None):
+  def __init__(self, tmp_path, extra_config='', plugins=(), server=None, timer=True):
     self.tmp_path = tmp_path
     self.extra_config = extra_config
     self.plugins = plugins
     self.server = server # reuse a FakeServer (its map state) across controller restarts
+    self.timer = timer # False: no SecondPassed events, tests raise them with tick()
   #
 
   async def __aenter__(self):
@@ -39,6 +40,9 @@ class Harness:
     await self.server.start()
     cfg = config.Config(write_config(self.tmp_path, self.server.port, self.extra_config, self.plugins))
     self.controller = Controller(cfg, log.Logging(cfg.log_path, cfg.log_level))
+    if not self.timer:
+      self.controller.timer = lambda: asyncio.Event().wait()
+    #
     self.task = asyncio.create_task(self.controller.run())
     await asyncio.wait_for(self.server.connected.wait(), 5)
     await self.settle()
@@ -71,6 +75,28 @@ class Harness:
 
   def plugin(self, name):
     return self.controller.plugins.get(name)
+  #
+
+  async def join(self, login, nickname=None, player_id=None):
+    info = {'Login': login, 'NickName': nickname or login, 'PlayerId': player_id or len(self.server.players) + 10,
+      'TeamId': -1, 'SpectatorStatus': 0, 'LadderRanking': 0, 'Flags': 0}
+    self.server.players[login] = info
+    await self.server.callback('TrackMania.PlayerConnect', login, False)
+    await self.server.callback('TrackMania.PlayerInfoChanged', info)
+    await self.settle()
+  #
+
+  async def leave(self, login):
+    self.server.players.pop(login, None)
+    await self.server.callback('TrackMania.PlayerDisconnect', login)
+    await self.settle()
+  #
+
+  async def tick(self, seconds=1):
+    for _ in range(seconds):
+      await self.controller.events.emit('SecondPassed')
+    #
+    await self.settle()
   #
 
   def manialink(self, login, manialink_id=None):
