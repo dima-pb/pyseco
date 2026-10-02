@@ -1,8 +1,9 @@
 import xmlrpc.client
 
-from core import commands, log, roles
+from core import commands, log
 from core.server import request_xml
 from plugins.plugin import Plugin
+from services.playlist import Entry, PlaylistError
 
 
 class CustomVote(Plugin):
@@ -73,16 +74,13 @@ class CustomVote(Plugin):
   #
 
   async def replay_map(self):
+    # first in the playlist, which decides the next map
     map = await self.controller.server.get_current_challenge_info()
-    jukebox = self.controller.plugins.get('jukebox')
-    if jukebox is None:
-      await self.controller.server.choose_next_challenge(map['FileName'])
-      return
+    try:
+      await self.controller.playlist.request(Entry.from_map(map, source='Replay'), front=True)
+    except PlaylistError as exc:
+      self.controller.logger.message('Replay: ' + str(exc), log.LOG_WARNING)
     #
-    # through the jukebox, which decides the next map; first in the queue
-    # TODO: reaches into another plugin; goes through the playlist service once it exists
-    from plugins.jukebox import Entry
-    await jukebox.add(Entry.from_map(map, source='Replay'), roles.ADMIN, jukebox.no_reply, front=True)
   #
 
   async def skip_map(self):

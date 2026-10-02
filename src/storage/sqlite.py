@@ -2,7 +2,7 @@ import asyncio
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-from storage.interfaces import (Ban, JukeboxStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
+from storage.interfaces import (Ban, PlaylistStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
   StoredPlayer)
 
 
@@ -237,9 +237,9 @@ class SqliteMapStore(MapStore):
 #
 
 
-# ---- jukebox ----
+# ---- playlist (tables and migrations keep their first name, jukebox) ----
 
-JUKEBOX_MIGRATIONS = [
+PLAYLIST_MIGRATIONS = [
   # 1
   '''
   CREATE TABLE jukebox_queue (
@@ -261,14 +261,14 @@ JUKEBOX_MIGRATIONS = [
 ]
 
 
-class SqliteJukeboxStore(JukeboxStore):
+class SqlitePlaylistStore(PlaylistStore):
 
   def __init__(self, db):
     self.db = db
   #
 
   async def migrate(self):
-    await self.db.migrate('jukebox', JUKEBOX_MIGRATIONS)
+    await self.db.migrate('jukebox', PLAYLIST_MIGRATIONS)
   #
 
   async def queue(self):
@@ -372,13 +372,13 @@ class SqliteStorage(Storage):
     self.db = Database(path)
     self.players = SqlitePlayerStore(self.db)
     self.maps = SqliteMapStore(self.db)
-    self.jukebox = SqliteJukeboxStore(self.db)
+    self.playlist = SqlitePlaylistStore(self.db)
     self.moderation = SqliteModerationStore(self.db)
   #
 
   async def open(self):
     await self.db.open()
-    for store in (self.players, self.maps, self.jukebox, self.moderation):
+    for store in (self.players, self.maps, self.playlist, self.moderation):
       await store.migrate()
     #
   #

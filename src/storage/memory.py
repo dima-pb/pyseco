@@ -1,7 +1,7 @@
 import copy
 import datetime
 
-from storage.interfaces import (Ban, JukeboxStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
+from storage.interfaces import (Ban, PlaylistStore, MapStore, ModerationStore, Play, PlayerStore, QueuedMap, Storage,
   StoredPlayer)
 
 
@@ -89,7 +89,7 @@ class MemoryMapStore(MapStore):
 #
 
 
-class MemoryJukeboxStore(JukeboxStore):
+class MemoryPlaylistStore(PlaylistStore):
 
   def __init__(self):
     self._queue = []
@@ -166,7 +166,7 @@ class MemoryStorage(Storage):
   def __init__(self):
     self.players = MemoryPlayerStore()
     self.maps = MemoryMapStore()
-    self.jukebox = MemoryJukeboxStore()
+    self.playlist = MemoryPlaylistStore()
     self.moderation = MemoryModerationStore()
   #
 

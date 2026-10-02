@@ -1,6 +1,4 @@
 import asyncio
-import json
-import re
 
 from core import roles
 from conftest import Harness, action_of, texts
@@ -19,7 +17,7 @@ def next_file(h):
 
 
 async def queue_uids(h):
-  return [e.uid for e in h.plugin('jukebox').queue]
+  return [e.uid for e in h.controller.playlist.queue]
 #
 
 
@@ -68,7 +66,7 @@ def test_jukebox_sets_next_map_and_follows_the_rules(tmp_path):
       await h.chat('bob', '/jb 5')
       assert 'already have a map' in h.replies_to('bob')[-1]
       await h.chat('carl', '/jb 4')
-      assert 'already in the jukebox' in h.replies_to('carl')[-1]
+      assert 'already in the queue' in h.replies_to('carl')[-1]
       await h.chat('carl', '/jb 5')
       await h.chat('carl', '/jb 99')
       assert 'There is no map 99' in h.replies_to('carl')[-1]
@@ -149,10 +147,10 @@ def test_replay_vote_goes_first_in_the_jukebox(tmp_path):
 def test_temporary_maps_are_removed_after_they_were_played(tmp_path):
   async def scenario():
     async with Harness(tmp_path, plugins=PLUGINS) as h:
-      jukebox = h.plugin('jukebox')
-      from plugins.jukebox import Entry
+      playlist = h.controller.playlist
+      from services.playlist import Entry
       new = Entry('uid-Challenges\\TMX\\7.Challenge.Gbx', 'Challenges\\TMX\\7.Challenge.Gbx', 'TMX 7', source='TMX')
-      assert await jukebox.add(new, roles.ADMIN, jukebox.no_reply, temporary=True)
+      await playlist.request(new, temporary=True)
       assert h.server.called('AddChallenge') == [('Challenges\\TMX\\7.Challenge.Gbx',)]
       await h.server.play_next() # the TMX map
       await h.settle()
@@ -164,7 +162,7 @@ def test_temporary_maps_are_removed_after_they_were_played(tmp_path):
 
       # kept with /addthis
       other = Entry('uid-Challenges\\TMX\\8.Challenge.Gbx', 'Challenges\\TMX\\8.Challenge.Gbx', 'TMX 8', source='TMX')
-      await jukebox.add(other, roles.ADMIN, jukebox.no_reply, temporary=True)
+      await playlist.request(other, temporary=True)
       await h.server.play_next()
       await h.settle()
       await h.chat('bob', '/addthis')
@@ -174,46 +172,6 @@ def test_temporary_maps_are_removed_after_they_were_played(tmp_path):
       await h.server.play_next()
       await h.settle()
       assert len(h.server.called('RemoveChallenge')) == 1
-    #
-  #
-  run(scenario())
-#
-
-
-def test_xaseco_side_requests_and_state(tmp_path):
-  async def scenario():
-    async with Harness(tmp_path, plugins=PLUGINS) as h:
-      def request(**data):
-        # what the XAseco side sends: Echo('pyseco-shim|<json>', 'pyseco-shim'), arriving swapped
-        return h.server.callback('TrackMania.Echo', 'pyseco-shim', 'pyseco-shim|' + json.dumps(data))
-      #
-      def last_state():
-        first = [params[0] for params in h.server.called('Echo') if params[1] == 'pyseco'][-1]
-        return json.loads(first[len('pyseco|'):])
-      #
-      await request(action='add', uid='uid3', filename=h.server.maps[2]['FileName'], login='eve', nickname='Eve')
-      await h.settle()
-      assert await queue_uids(h) == ['uid3']
-      state = last_state()
-      assert state['queue'][0] | {} == {'uid': 'uid3', 'FileName': h.server.maps[2]['FileName'], 'Name': '$f00Map 3',
-        'Env': 'Stadium', 'Login': 'eve', 'Nick': 'Eve', 'source': 'Jukebox', 'tmx': False}
-
-      await request(action='add', uid='uid4', filename=h.server.maps[3]['FileName'], login='eve', nickname='Eve')
-      await h.settle()
-      assert 'already have a map' in h.replies_to('eve')[-1] # the same rules apply
-      assert [e['uid'] for e in last_state()['queue']] == ['uid3'] # XAseco side gets the real state back
-
-      await request(action='drop', uid='uid3', login='mallory')
-      await h.settle()
-      assert await queue_uids(h) == ['uid3'] # not mallory's
-      await request(action='drop', uid='uid3', login='eve')
-      await h.settle()
-      assert await queue_uids(h) == []
-
-      count = len(h.server.called('Echo'))
-      await request(action='hello')
-      await h.settle()
-      assert len(h.server.called('Echo')) == count + 1
     #
   #
   run(scenario())
@@ -253,6 +211,34 @@ def test_jukebox_with_the_memory_backend(tmp_path):
       await h.chat('bob', '/history')
       assert '1. $fffMap 3$z$s' in h.replies_to('bob')[-1]
       assert not (tmp_path / 'data' / 'pyseco.db').exists()
+    #
+  #
+  run(scenario())
+#
+
+
+def test_replay_vote_works_without_the_jukebox(tmp_path):
+  # plugins don't know each other: the vote asks the playlist
+  async def scenario():
+    async with Harness(tmp_path, plugins=('custom_votes',)) as h:
+      await h.server.callback('TrackMania.Echo', 'replay', 'Replay this map')
+      await h.settle()
+      assert await queue_uids(h) == ['uid1']
+      assert next_file(h) == h.server.maps[0]['FileName']
+      await h.chat('bob', '/nextmap')
+      assert h.replies_to('bob')[-1].endswith('Next map: $fffMap 1$z$s (requested by Replay)')
+    #
+  #
+  run(scenario())
+#
+
+
+def test_jukebox_queue_window(tmp_path):
+  async def scenario():
+    async with Harness(tmp_path, plugins=PLUGINS) as h:
+      await h.chat('bob', '/jb 3')
+      await h.chat('bob', '/jukebox')
+      assert texts(h.manialink('bob'))[:4] == ['$fffJukebox', '$ddd1.', '$fffMap 3', '$dddbob']
     #
   #
   run(scenario())

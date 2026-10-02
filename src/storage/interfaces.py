@@ -121,7 +121,7 @@ class MapStore(ABC):
 #
 
 
-class JukeboxStore(ABC):
+class PlaylistStore(ABC):
 
   @abstractmethod
   async def queue(self):
@@ -200,11 +200,11 @@ class ModerationStore(ABC):
 
 
 class Storage(ABC):
-  # one backend; players, maps, jukebox, moderation are its stores
+  # one backend; players, maps, playlist, moderation are its stores
 
   players: PlayerStore
   maps: MapStore
-  jukebox: JukeboxStore
+  playlist: PlaylistStore
   moderation: ModerationStore
 
   @abstractmethod

@@ -12,6 +12,7 @@ CHAT = 'Chat'                          # ChatMessage, chat of players that is no
 MAP_STARTED = 'MapStarted'             # server_api.ChallengeInfo of the new map
 MAP_ENDED = 'MapEnded'                 # server_api.ChallengeInfo of the map that ended (the podium follows)
 MAP_LIST_CHANGED = 'MapListChanged'    # None; maps.list was reloaded after maps were added or removed
+PLAYLIST_CHANGED = 'PlaylistChanged'   # None; requests were added or removed, see playlist.queue
 SECOND_PASSED = 'SecondPassed'         # None
 
 

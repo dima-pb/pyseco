@@ -1,267 +1,75 @@
-import json
-import xmlrpc.client
-
-from core import commands, events, log, roles
+from core import commands, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
+from services.playlist import Entry, PlaylistError
 from services.windows import ListWindow
 
 
-# Echo protocol with the XAseco side (xaseco addon plugin.rasp_jukebox.php, which stands in for RASP's jukebox):
-# The server swaps the Echo parameters: Echo(a, b) arrives as callback (b, a), and XAseco only passes a on.
-# So every message is sent as Echo('<channel>|<json>', '<channel>').
-TO_XASECO = 'pyseco'
-FROM_XASECO = 'pyseco-shim'
-
 LIST_PAGE = 8
-
-class Entry:
-  # one map in the jukebox; source: Jukebox, Replay, TMX, Admin, ...
-
-  def __init__(self, uid, filename, name, environment='', login='', nickname='', source='Jukebox'):
-    self.uid = uid
-    self.filename = filename
-    self.name = name
-    self.environment = environment
-    self.login = login
-    self.nickname = nickname
-    self.source = source
-  #
-
-  @staticmethod
-  def from_map(m, login='', nickname='', source='Jukebox'):
-    return Entry(m['UId'], m['FileName'], m['Name'], m.get('Environnement', ''), login, nickname, source)
-  #
-
-  def for_xaseco(self, temporary):
-    # the fields of an entry in RASP's $jukebox, as XAseco plugins (Records-Eyepiece) expect them
-    return {'uid': self.uid, 'FileName': self.filename, 'Name': self.name, 'Env': self.environment,
-      'Login': self.login, 'Nick': self.nickname, 'source': self.source, 'tmx': temporary}
-  #
-#
 
 
 class Jukebox(Plugin):
-  # Players wish maps to be played next. The jukebox owns "which map comes next": it sets the server's
-  # next map right away whenever the first entry changes, so skips and votes work too.
-  # Temporary maps (from TMX) are removed from the server after they were played, unless kept with /addthis.
+  # Players wish maps from the server's list (/list, /jukebox <number>). The wishes go to the playlist, which
+  # decides what comes next; the jukebox only adds its rules for players.
   #
   # Settings ([jukebox] in pyseco.toml):
-  #   recent = 10       players can't jukebox one of the last <recent> maps (operators and above can)
-  #   per_player = 1    entries per player at a time (operators and above: no limit)
+  #   recent = 10       players can't wish one of the last <recent> maps (operators and above can)
+  #   per_player = 1    wishes per player in the queue at a time (operators and above: no limit)
 
   def __init__(self, controller):
     super().__init__(controller)
     settings = controller.settings('jukebox')
     self.recent = int(settings.get('recent', 10))
     self.per_player = int(settings.get('per_player', 1))
-    self.store = None # storage.interfaces.JukeboxStore
-    self.queue = [] # [Entry], stored as QueuedMap (same fields)
-    self.temporary = {} # uid -> filename of maps to remove after they were played
-    self.playing_temporary = None # uid of the temporary map being played
-
-    controller.events.register(events.MAP_STARTED, self.map_started)
-    controller.events.register(events.MAP_LIST_CHANGED, self.list_changed)
-    controller.events.register('TrackMania.Echo', self.echo)
-
+    self.playlist = controller.playlist
     self.list_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
+    self.queue_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
 
     register = controller.commands.register
     register('list', self.cmd_list, help='lists the maps on the server', usage='[page | search text]')
     register('jukebox', self.cmd_jukebox, help='wishes the map with this number (see /list) to be played next',
       usage='[<number> | list | drop | drop <position> | clear]', aliases=('jb',))
-    register('nextmap', self.cmd_nextmap, help='shows the next map')
-    register('history', self.cmd_history, help='shows the recently played maps')
-    register('addthis', self.cmd_addthis, role=roles.ADMIN, help='keeps the current temporary (TMX) map on the server')
-  #
-
-  async def start(self):
-    self.store = self.controller.storage.jukebox
-    self.queue = [Entry(q.uid, q.filename, q.name, q.environment, q.login, q.nickname, q.source)
-      for q in await self.store.queue()]
-    self.temporary = await self.store.temporary_maps()
-    current = self.controller.maps.current
-    if current is not None and current['UId'] in self.temporary:
-      self.playing_temporary = current['UId']
-    #
-    await self.apply_next()
-    await self.publish()
-  #
-
-  def log(self, text, level=log.LOG_INFO):
-    self.controller.logger.message('[jukebox] ' + text, level)
-  #
-
-  async def announce(self, text):
-    await self.controller.chat.announce(text)
   #
 
 
-  # ---- queue ----
+  # ---- wishes ----
 
-  async def add(self, entry, role, reply, front=False, temporary=False):
-    # checks the rules, then queues the map; reply(text) tells the requester why not
-    if any(e.uid == entry.uid for e in self.queue):
-      await reply('This map is already in the jukebox.')
-      return False
-    #
+  async def wish(self, login, display_name, role, m, reply):
+    # checks the rules for players, then asks the playlist; reply(text) tells the player why not
     if role < roles.OPERATOR:
-      if entry.login and sum(1 for e in self.queue if e.login == entry.login) >= self.per_player:
+      if sum(1 for e in self.playlist.queue if e.login == login) >= self.per_player:
         await reply('You already have a map in the jukebox (/jukebox drop removes it).')
         return False
       #
       # the current map counts as played (a replay goes through the vote)
-      if entry.uid in [uid for uid, _, _ in await self.controller.maps.history(self.recent + 1)]:
+      if m['UId'] in [uid for uid, _, _ in await self.controller.maps.history(self.recent + 1)]:
         await reply('This map was played recently, choose another one.')
         return False
       #
     #
-    if entry.uid not in self.controller.maps.by_uid:
-      # a new file (TMX): the server has to take it into its list first
-      try:
-        await self.controller.server.add_challenge(entry.filename)
-      except xmlrpc.client.Fault as fault:
-        await reply('The server did not accept the map: ' + fault.faultString)
-        return False
-      #
-      await self.controller.maps.refresh()
-    #
+    player = self.controller.players.online.get(login)
+    entry = Entry.from_map(m, login, player.nickname if player else display_name)
     try:
-      await self.controller.server.check_challenge_for_current_server_params(entry.filename)
-    except xmlrpc.client.Fault as fault:
-      await reply('The map does not fit the server settings: ' + fault.faultString)
+      await self.playlist.request(entry)
+    except PlaylistError as exc:
+      await reply(str(exc))
       return False
     #
-    if temporary:
-      self.temporary[entry.uid] = entry.filename
-      await self.store.add_temporary(entry.uid, entry.filename)
-    #
-    if front:
-      self.queue.insert(0, entry)
-    else:
-      self.queue.append(entry)
-    #
-    await self.changed()
-    who = strip_colors(entry.nickname) if entry.nickname else entry.source
-    await self.announce('$fff' + strip_colors(entry.name) + '$z$s was added to the jukebox by $fff' + who + '$z$s.')
+    await self.controller.chat.announce('$fff' + strip_colors(entry.name) + '$z$s was added to the jukebox by $fff'
+      + entry.requested_by() + '$z$s.')
     return True
   #
 
-  async def remove(self, index):
-    entry = self.queue.pop(index)
-    await self.changed()
-    return entry
-  #
-
-  async def clear(self):
-    self.queue = []
-    await self.changed()
-  #
-
-  async def changed(self):
-    await self.store.set_queue(self.queue)
-    await self.apply_next()
-    await self.publish()
-  #
-
-  async def apply_next(self):
-    # makes the first entry the server's next map; entries the server refuses are dropped
-    while self.queue:
-      entry = self.queue[0]
-      try:
-        await self.controller.server.choose_next_challenge(entry.filename)
-        return
-      except xmlrpc.client.Fault as fault:
-        self.queue.pop(0)
-        self.log('Dropped ' + entry.filename + ' from the jukebox: ' + fault.faultString, log.LOG_WARNING)
-        await self.announce('$fff' + strip_colors(entry.name) + '$z$s was dropped from the jukebox, '
-          'the server can\'t play it.')
-      #
-    #
-  #
-
-  async def map_started(self, current):
-    uid = current['UId']
-    # the temporary map played before is done
-    if self.playing_temporary is not None and self.playing_temporary != uid:
-      await self.remove_temporary(self.playing_temporary)
-    #
-    self.playing_temporary = uid if uid in self.temporary else None
-    if self.queue and self.queue[0].uid == uid:
-      self.queue.pop(0)
-    #
-    await self.changed()
-  #
-
-  async def remove_temporary(self, uid):
-    if uid not in self.temporary or any(e.uid == uid for e in self.queue):
-      return # kept (/addthis) or wished again: it stays until it was played the last time
-    #
-    filename = self.temporary.pop(uid)
-    await self.store.remove_temporary(uid)
-    try:
-      await self.controller.server.remove_challenge(filename)
-    except xmlrpc.client.Fault as fault:
-      self.log('Could not remove ' + filename + ': ' + fault.faultString, log.LOG_WARNING)
-    #
-  #
-
-  async def list_changed(self, _):
-    # maps were added or removed, the next index may have moved
-    await self.apply_next()
-  #
-
-
-  # ---- XAseco side ----
-
-  async def publish(self):
-    # sends queue and history to the XAseco side, which mirrors them for Records-Eyepiece
-    history = list(reversed(await self.controller.maps.recent_uids(20)))
-    state = {'queue': [e.for_xaseco(e.uid in self.temporary) for e in self.queue], 'history': history}
-    try:
-      await self.controller.server.echo(TO_XASECO + '|' + json.dumps(state), TO_XASECO)
-    except xmlrpc.client.Fault as fault:
-      self.log('Could not publish the jukebox: ' + fault.faultString, log.LOG_WARNING)
-    #
-  #
-
-  async def echo(self, params):
-    if len(params) != 2 or not params[1].startswith(FROM_XASECO + '|'):
+  async def wish_from_window(self, login, uid):
+    reply = lambda text: self.controller.chat.tell(login, text)
+    m = self.controller.maps.by_uid.get(uid)
+    if m is None:
+      await reply('This map is no longer on the server.')
       return
     #
-    request = json.loads(params[1][len(FROM_XASECO) + 1:])
-    action = request.get('action')
-    login = request.get('login') or ''
-    # XAseco checked its own admin rights already
-    role = max(await self.controller.accounts.role(login or None), roles.ADMIN if request.get('admin') else roles.PLAYER)
-    reply = (lambda text: self.controller.chat.tell(login, text)) if login else self.no_reply
-    if action == 'hello':
-      await self.publish()
-    elif action == 'add':
-      m = self.controller.maps.by_uid.get(request['uid'])
-      entry = Entry.from_map(m, login, request.get('nickname', ''), request.get('source', 'Jukebox')) if m else \
-        Entry(request['uid'], request['filename'], request.get('name', ''), request.get('env', ''), login,
-          request.get('nickname', ''), request.get('source', 'Jukebox'))
-      if not await self.add(entry, role, reply, front=request.get('source', '').endswith('Replay'),
-          temporary=bool(request.get('tmx'))):
-        await self.publish() # undo what the XAseco side assumed
-      #
-    elif action == 'drop':
-      index = next((i for i, e in enumerate(self.queue) if e.uid == request.get('uid')), None)
-      if index is not None and (role >= roles.OPERATOR or self.queue[index].login == login):
-        await self.remove(index)
-      else:
-        await self.publish()
-      #
-    elif action == 'clear' and role >= roles.ADMIN:
-      await self.clear()
-    else:
-      await self.publish()
+    if await self.wish(login, login, await self.controller.accounts.role(login), m, reply):
+      await self.list_window.close(login)
     #
-  #
-
-  async def no_reply(self, text):
-    pass
   #
 
 
@@ -300,41 +108,25 @@ class Jukebox(Plugin):
     pages = max(1, (len(maps) + LIST_PAGE - 1) // LIST_PAGE)
     page = min(max(page, 1), pages)
     shown = maps[(page - 1) * LIST_PAGE:page * LIST_PAGE]
-    prefix = '/' if ctx.source == commands.GAME else '!'
-    await ctx.reply('Maps ' + str(page) + '/' + str(pages) + ' (' + prefix + 'jukebox <number> to wish one, '
-      + prefix + 'list <page> for more):')
+    await ctx.reply('Maps ' + str(page) + '/' + str(pages) + ' (!jukebox <number> to wish one, !list <page> for more):')
     for i, m in shown:
       await ctx.reply(self.map_line(i, m))
     #
   #
 
-  async def wish(self, login, display_name, role, m, reply):
-    player = self.controller.players.online.get(login)
-    nickname = player.nickname if player else display_name
-    return await self.add(Entry.from_map(m, login, nickname), role, reply)
-  #
-
-  async def wish_from_window(self, login, uid):
-    reply = lambda text: self.controller.chat.tell(login, text)
-    m = self.controller.maps.by_uid.get(uid)
-    if m is None:
-      await reply('This map is no longer on the server.')
-      return
-    #
-    if await self.wish(login, login, await self.controller.accounts.role(login), m, reply):
-      await self.list_window.close(login)
-    #
-  #
-
   async def cmd_jukebox(self, ctx):
+    queue = self.playlist.queue
     args = [a.lower() for a in ctx.args]
     if not args or args == ['list']:
-      if not self.queue:
+      if ctx.source == commands.GAME:
+        rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(e.name), '$ddd' + e.requested_by())
+          for i, e in enumerate(queue)]
+        await self.queue_window.open(ctx.login, 'Jukebox', rows, hint='/jukebox drop removes your wish')
+      elif not queue:
         await ctx.reply('The jukebox is empty.')
-      #
-      for i, e in enumerate(self.queue):
-        await ctx.reply(str(i + 1) + '. $fff' + strip_colors(e.name) + '$z$s ('
-          + (strip_colors(e.nickname) or e.source) + ')')
+      else:
+        await ctx.reply('\n'.join(str(i + 1) + '. ' + strip_colors(e.name) + ' (' + e.requested_by() + ')'
+          for i, e in enumerate(queue)))
       #
     elif args[0].isdigit() and len(args) == 1:
       if ctx.login is None:
@@ -348,62 +140,26 @@ class Jukebox(Plugin):
       #
       await self.wish(ctx.login, ctx.display_name, ctx.role, self.controller.maps.list[number - 1], ctx.reply)
     elif args == ['drop']:
-      index = next((i for i, e in enumerate(self.queue) if ctx.login and e.login == ctx.login), None)
+      index = next((i for i, e in enumerate(queue) if ctx.login and e.login == ctx.login), None)
       if index is None:
         await ctx.reply('You have no map in the jukebox.')
       else:
-        entry = await self.remove(index)
+        entry = await self.playlist.remove(index)
         await ctx.reply('Removed ' + strip_colors(entry.name) + ' from the jukebox.')
       #
     elif args[0] == 'drop' and len(args) == 2 and args[1].isdigit() and ctx.role >= roles.OPERATOR:
       position = int(args[1])
-      if not 1 <= position <= len(self.queue):
+      if not 1 <= position <= len(queue):
         await ctx.reply('The jukebox has no position ' + args[1] + '.')
         return
       #
-      entry = await self.remove(position - 1)
-      await self.announce('$fff' + strip_colors(entry.name) + '$z$s was removed from the jukebox.')
+      entry = await self.playlist.remove(position - 1)
+      await self.controller.chat.announce('$fff' + strip_colors(entry.name) + '$z$s was removed from the jukebox.')
     elif args == ['clear'] and ctx.role >= roles.ADMIN:
-      await self.clear()
-      await self.announce('The jukebox was cleared.')
+      await self.playlist.clear()
+      await self.controller.chat.announce('The jukebox was cleared.')
     else:
       raise commands.UsageError()
     #
-  #
-
-  async def cmd_nextmap(self, ctx):
-    if self.queue:
-      e = self.queue[0]
-      await ctx.reply('Next map: $fff' + strip_colors(e.name) + '$z$s (jukebox: '
-        + (strip_colors(e.nickname) or e.source) + ')')
-      return
-    #
-    m = await self.controller.server.get_next_challenge_info()
-    await ctx.reply('Next map: $fff' + strip_colors(m['Name']) + '$z$s')
-  #
-
-  async def cmd_history(self, ctx):
-    history = await self.controller.maps.history(11)
-    if len(history) < 2:
-      await ctx.reply('No maps were played yet.')
-      return
-    #
-    for i, (uid, name, played_at) in enumerate(history[1:]):
-      await ctx.reply(str(i + 1) + '. $fff' + strip_colors(name) + '$z$s (' + played_at + ')')
-    #
-  #
-
-  async def cmd_addthis(self, ctx):
-    current = self.controller.maps.current
-    if current is None or current['UId'] not in self.temporary:
-      await ctx.reply('The current map is not a temporary map.')
-      return
-    #
-    del self.temporary[current['UId']]
-    self.playing_temporary = None
-    await self.store.remove_temporary(current['UId'])
-    await self.publish()
-    await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server. '
-      'To keep it after a server restart, save the map list (/admin writetracklist).')
   #
 #

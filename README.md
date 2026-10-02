@@ -15,10 +15,7 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `flexitime`: the time limit of a map, kept by pyseco with a clock on screen; admins change it while the map
     is played (`/timeleft 30`, `/timeleft +10`, `/timeleft pause`)
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
-    `/nextmap`, `/history`); temporary
-    (TMX) maps are removed after they were played unless an admin keeps them with `/addthis`. Replaces XAseco's
-    jukebox: with XAseco running, its `plugin.rasp_jukebox.php` is replaced by the bridge from tmf-docker
-    (`xaseco/addons`), so Records-Eyepiece's track list wishes maps through pyseco
+    `/jukebox` shows the wishes); rules: one wish per player, no recently played maps (operators and above: no limits)
 
 ## Setup
 Requires Python 3.11 or newer.
@@ -38,7 +35,7 @@ or in the foreground with `cd src && ../.venv/bin/python pyseco.py`.
 SIGTERM (docker, systemd) stops the controller cleanly.
 
 ## Data
-What pyseco keeps (players, roles, discord links, played maps, the jukebox, ...) is defined by the interfaces in
+What pyseco keeps (players, roles, discord links, played maps, the playlist, bans, ...) is defined by the interfaces in
 `src/storage/interfaces.py`. The controller and the plugins only use these interfaces, backends implement them:
 
 - `sqlite` (default): one file, `<data_dir>/pyseco.db`. Back it up with `sqlite3 pyseco.db ".backup copy.db"` or
@@ -65,7 +62,8 @@ Nobody can act on a player with the same or a higher role.
   (`server_api.py`), events, commands, roles, settings, log
 - `src/services/`: always there, used by plugins: `accounts` (roles, discord links), `players` (who is online),
   `maps` (map list, current map, history), `chat` (messages to players), `ui` and `windows` (manialinks),
-  `moderation` (kick, mute, ban)
+  `moderation` (kick, mute, ban), `playlist` (which map comes next: requests from the jukebox, votes, ... are
+  queued, temporary maps are removed after they were played; `/nextmap`, `/history`, `/addthis`)
 - `src/storage/`: what pyseco keeps, see Data
 - `src/plugins/`: optional features, switched on in `pyseco.toml`
 
@@ -103,7 +101,7 @@ Handlers are `async` functions. Never block in a handler (no `time.sleep`, no sy
 everything shares one event loop.
 
 Events (`core/events.py`): `PLAYER_JOINED` / `PLAYER_LEFT` (a `Player`), `CHAT` (player and text, no commands),
-`MAP_STARTED` / `MAP_ENDED` (the map), `MAP_LIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
+`MAP_STARTED` / `MAP_ENDED` (the map), `MAP_LIST_CHANGED`, `PLAYLIST_CHANGED`, `SECOND_PASSED`. Raw server callbacks can be registered by their
 name (`'TrackMania.Echo'`, ...) and get the callback's parameters.
 
 ## Tests

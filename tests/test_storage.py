@@ -91,23 +91,23 @@ def test_map_history(make_storage):
 #
 
 
-def test_jukebox_queue_and_temporary_maps(make_storage):
+def test_playlist_queue_and_temporary_maps(make_storage):
   async def scenario(s):
-    assert await s.jukebox.queue() == []
+    assert await s.playlist.queue() == []
     entries = [QueuedMap('u1', 'f1', 'Map 1', 'Stadium', 'bob', 'Bob', 'Jukebox'),
       QueuedMap('u2', 'f2', 'Map 2', '', '', '', 'TMX')]
-    await s.jukebox.set_queue(entries)
-    assert await s.jukebox.queue() == entries
+    await s.playlist.set_queue(entries)
+    assert await s.playlist.queue() == entries
     entries.pop() # the stored queue is a copy
-    assert len(await s.jukebox.queue()) == 2
-    await s.jukebox.set_queue([])
-    assert await s.jukebox.queue() == []
+    assert len(await s.playlist.queue()) == 2
+    await s.playlist.set_queue([])
+    assert await s.playlist.queue() == []
 
-    await s.jukebox.add_temporary('u1', 'f1')
-    await s.jukebox.add_temporary('u2', 'f2')
-    await s.jukebox.remove_temporary('u1')
-    await s.jukebox.remove_temporary('unknown')
-    assert await s.jukebox.temporary_maps() == {'u2': 'f2'}
+    await s.playlist.add_temporary('u1', 'f1')
+    await s.playlist.add_temporary('u2', 'f2')
+    await s.playlist.remove_temporary('u1')
+    await s.playlist.remove_temporary('unknown')
+    assert await s.playlist.temporary_maps() == {'u2': 'f2'}
   #
   with_storage(make_storage, scenario)
 #
