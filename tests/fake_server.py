@@ -34,6 +34,11 @@ class FakeServer:
       'RemoveChallenge': self.remove_map,
       'Echo': self.echo,
       'GetServerName': lambda: 'Fake Server',
+      'GetSystemInfo': lambda: {'ServerLogin': 'fakeserver'},
+      'GetServerPackMask': lambda: 'Stadium',
+      'GetServerOptions': lambda *args: {'Name': 'Fake Server', 'Comment': '', 'Password': '', 'CurrentMaxPlayers': 32,
+        'CurrentMaxSpectators': 32, 'CurrentLadderMode': 0},
+      'GetDetailedPlayerInfo': self.detailed_player_info,
       'GetGameMode': lambda: 1, # time attack
       'GetStatus': lambda: {'Code': 4, 'Name': 'Running - Play'},
       'GetTimeAttackLimit': lambda: {'CurrentValue': 300000, 'NextValue': 300000},
@@ -71,6 +76,12 @@ class FakeServer:
     return dict(self.players[login])
   #
 
+  def detailed_player_info(self, login):
+    info = self.player_info(login)
+    return {'Login': login, 'NickName': info['NickName'], 'Path': 'World|Germany|Bavaria', 'IsSpectator': False,
+      'IsInOfficialMode': False, 'LadderStats': {'TeamName': '', 'PlayerRankings': [{'Ranking': 1000}]}}
+  #
+
   def kick(self, login, message=''):
     # like the real server: the player is disconnected (a connecting player is not in self.players yet)
     self.players.pop(login, None)
@@ -81,7 +92,8 @@ class FakeServer:
   @staticmethod
   def make_map(i, prefix='Map'):
     return {'UId': 'uid' + str(i), 'Name': '$f00' + prefix + ' ' + str(i), 'FileName': 'Challenges\\' + prefix + str(i) + '.Challenge.Gbx',
-      'Author': 'author' + str(i), 'Environnement': 'Stadium', 'GoldTime': 30000, 'CopperPrice': 100}
+      'Author': 'author' + str(i), 'Environnement': 'Stadium', 'GoldTime': 30000, 'AuthorTime': 25000,
+      'CopperPrice': 100}
   #
 
   def index(self, filename):

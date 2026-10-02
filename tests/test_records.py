@@ -47,20 +47,21 @@ def test_records_are_kept_with_checkpoints_and_told(tmp_path):
 #
 
 
-def test_widget_shows_top_and_own_neighbourhood(tmp_path):
+def test_widget_shows_top_the_one_to_beat_own_and_last(tmp_path):
   async def scenario():
-    async with Harness(tmp_path, '[local_records]\nlines = 5\n', plugins=('local_records',)) as h:
+    async with Harness(tmp_path, '[local_records]\ntop = 5\n', plugins=('local_records',)) as h:
       for n in range(1, 11):
         await h.join('p' + str(n))
         await h.drive('p' + str(n), [9000 + n * 10])
       #
       await h.join('new')
       lines = widget_lines(h.manialink('new'))
-      assert [l[0] for l in lines] == ['1.', '2.', '3.', '4.', '5.', '--.'] # no record yet: the own line
-      assert lines[-1] == ('--.', '-:--.--', 'new')
-      assert [l[0] for l in widget_lines(h.manialink('p8'))] == ['1.', '2.', '3.', '7.', '8.'] # who to beat, and you
-      assert [l[0] for l in widget_lines(h.manialink('p10'))] == ['1.', '2.', '3.', '9.', '10.']
-      assert [l[0] for l in widget_lines(h.manialink('p2'))] == ['1.', '2.', '3.', '4.', '5.']
+      assert [l[0] for l in lines] == ['1.', '2.', '3.', '4.', '5.', '10.', '--.'] # no record yet: the own line
+      assert lines[-2] == ('10.', '0:09.10', 'p10') and lines[-1] == ('--.', '-:--.--', 'new')
+      assert [l[0] for l in widget_lines(h.manialink('p8'))] == ['1.', '2.', '3.', '4.', '5.', '7.', '8.', '10.']
+      assert [l[0] for l in widget_lines(h.manialink('p10'))] == ['1.', '2.', '3.', '4.', '5.', '9.', '10.']
+      assert [l[0] for l in widget_lines(h.manialink('p6'))] == ['1.', '2.', '3.', '4.', '5.', '6.', '10.']
+      assert [l[0] for l in widget_lines(h.manialink('p2'))] == ['1.', '2.', '3.', '4.', '5.', '10.']
     #
   #
   run(scenario())
@@ -72,7 +73,7 @@ def test_records_window_and_checkpoints(tmp_path):
     async with Harness(tmp_path, plugins=('local_records',)) as h:
       await h.join('ann', 'Ann')
       await h.drive('ann', [3000, 6100, 9080])
-      await h.click('ann', h.controller.plugins.get('local_records').open_action)
+      await h.click('ann', h.controller.plugins.get('local_records').widget.action)
       page = h.manialink('ann')
       assert '$fffLocal Records on Map 1' in texts(page) and '$ff00:09.08' in texts(page)
       await h.click('ann', action_of(page, '$fffAnn'))
@@ -92,8 +93,8 @@ def test_records_window_and_checkpoints(tmp_path):
       assert shown[-1] == '$f66+0.03'
 
       # the whole widget opens the records
-      widget = h.manialink('ann', h.controller.plugins.get('local_records').widget_id)
-      opens = str(h.controller.plugins.get('local_records').open_action)
+      widget = h.manialink('ann', h.controller.plugins.get('local_records').widget.id)
+      opens = str(h.controller.plugins.get('local_records').widget.action)
       assert widget.find('frame').find('quad').get('action') == opens # the background
 
       # a new map: its own records

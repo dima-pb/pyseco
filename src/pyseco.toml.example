@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, discord, flexitime, jukebox, local_records, welcome
+# plugins to load: ad, custom_votes, dedimania, discord, flexitime, jukebox, local_records, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -61,11 +61,24 @@ max = 50
 announce = 30
 # a player who improves without being announced is told privately
 tell_player = true
-# records in the widget: the top 3 and the ones around the player's own
-lines = 5
+# best records in the widget; below them the one to beat, the own and the last record
+top = 5
+
+[dedimania]
+# the server's Dedimania community code (dedimania.net, or the server password)
+code = ""
+# the server's nation, 3 letters (IOC code)
+nation = "OTH"
+# new Dedimania records up to this rank are told to everybody, others only to the player
+announce = 30
+# best records in the widget; below them the one to beat, the own and the last record
+top = 5
+# false: only show the records, never send times (e.g. for a test server)
+send = true
 
 # Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
-# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5)
+# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5),
+# dedimania (default x = 48, y = 3.7, below local_records)
 #[widgets.flexitime]
 #x = 49
 #y = 32

@@ -131,7 +131,8 @@ class Controller:
   #
 
   async def stop(self):
-    # makes run() return
+    # makes run() return; the plugins stop while the server is still there (they hide their widgets)
+    await self.plugins.stop()
     await self.server.disconnect()
   #
 

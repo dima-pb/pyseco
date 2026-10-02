@@ -14,6 +14,8 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `welcome`: greets players when they join, tells everybody who comes and goes
   - `flexitime`: the time limit of a map, kept by pyseco with a clock on screen; admins change it while the map
     is played (`/timeleft 30`, `/timeleft +10`, `/timeleft pause`)
+  - `dedimania`: the Dedimania world records (dedimania.net) in a widget like the local records, `/dedirecs`; new
+    records are sent when the map ends. Needs the server's Dedimania community code in `[dedimania]`
   - `local_records`: the best time of every player on every map, with the checkpoints of the run; a widget with
     the top 3 and the records around your own, `/records` (a click on a record shows its checkpoints)
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,

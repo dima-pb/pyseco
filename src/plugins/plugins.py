@@ -8,6 +8,7 @@ from core import log
 AVAILABLE = {
   'ad': ('plugins.ad', 'Ad'),
   'custom_votes': ('plugins.custom_votes', 'CustomVote'),
+  'dedimania': ('plugins.dedimania', 'Dedimania'),
   'discord': ('plugins.discord', 'Discord'),
   'flexitime': ('plugins.flexitime', 'Flexitime'),
   'jukebox': ('plugins.jukebox', 'Jukebox'),
@@ -53,7 +54,9 @@ class Plugins:
   #
 
   async def stop(self):
-    for plugin in self.plugins:
+    # stops every plugin once
+    plugins, self.plugins = self.plugins, []
+    for plugin in plugins:
       try:
         await plugin.stop()
       except Exception:
