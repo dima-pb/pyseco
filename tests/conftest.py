@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.dirname(__file__))
@@ -71,4 +72,45 @@ class Harness:
   def plugin(self, name):
     return self.controller.plugins.get(name)
   #
+
+  def manialink(self, login, manialink_id=None):
+    # the last manialink (an ElementTree element) shown to this player, None if it was hidden since
+    shown = [params[1] for params in self.server.called('SendDisplayManialinkPageToLogin') if params[0] == login]
+    for xml in reversed(shown):
+      page = ET.fromstring(xml).find('manialink')
+      if manialink_id is None or page.get('id') == manialink_id:
+        return page if len(page) else None
+      #
+    #
+    return None
+  #
+
+  async def click(self, login, action, uid=5):
+    await self.server.callback('TrackMania.PlayerManialinkPageAnswer', uid, login, int(action))
+    await self.settle()
+  #
+#
+
+
+def texts(page):
+  # the texts of all labels in a manialink
+  return [l.get('text') for l in page.iter('label')]
+#
+
+
+def action_of(page, text):
+  # the action of the clickable row that contains the label with this text (or of the icon with this substyle)
+  for f in page.iter('frame'):
+    elements = list(f)
+    for i, e in enumerate(elements):
+      if e.tag == 'quad' and e.get('substyle') == text:
+        return e.get('action')
+      #
+      if e.tag == 'label' and e.get('text') == text:
+        row = [q for q in elements[:i] if q.tag == 'quad' and q.get('action')]
+        return row[-1].get('action')
+      #
+    #
+  #
+  raise AssertionError(text + ' not found')
 #

@@ -5,7 +5,7 @@ import xmlrpc.client
 from core import commands, events, log
 from core.server import Server, parse_callback
 from plugins.plugins import Plugins
-from services import accounts, chat, maps, players
+from services import accounts, chat, maps, players, ui
 import storage
 
 
@@ -24,7 +24,7 @@ class Controller:
   #   commands  register(name, handler, ...) for /commands in game and !commands on discord
   #   storage   what pyseco keeps (storage.interfaces)
   #   services: accounts (roles, discord links), players (who is online), maps (map list, current map,
-  #             history), chat (messages to players)
+  #             history), ui (manialinks; windows and widgets in services/windows.py), chat (messages to players)
   # Plugins use these, never each other.
 
   def __init__(self, config, logger):
@@ -40,6 +40,7 @@ class Controller:
     self.accounts = accounts.Accounts(self.storage.players, config.masteradmins)
     self.players = players.Players(self)
     self.maps = maps.Maps(self)
+    self.ui = ui.UI(self)
     self.chat = chat.Chat(self)
     self.plugins = Plugins(self, config.plugins)
   #

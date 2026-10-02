@@ -60,6 +60,7 @@ class Discord(Plugin):
 
     register = controller.commands.register
     only_discord = (commands.DISCORD,)
+    register('help', self.cmd_help, help='lists the commands you can use', sources=only_discord)
     register('players', self.cmd_players, help='lists the players on the server', sources=only_discord)
     register('skip', self.cmd_skip, role=roles.ADMIN, help='skips to the next map', sources=only_discord,
       aliases=('next',))
@@ -227,6 +228,12 @@ class Discord(Plugin):
   def discord_user_ingame(self, ctx):
     nick = ctx.display_name.replace('$', '$$')
     return nick + ('@$l[' + self.invite + ']discord$l' if self.invite else '@discord')
+  #
+
+  async def cmd_help(self, ctx):
+    lines = [self.prefix + c.name + (' ' + c.usage if c.usage else '') + ' - ' + c.help
+      for c in self.controller.commands.available(ctx.role, commands.DISCORD)]
+    await ctx.reply('\n'.join(lines))
   #
 
   async def cmd_players(self, ctx):

@@ -3,7 +3,7 @@ import json
 import re
 
 from core import roles
-from conftest import Harness
+from conftest import Harness, action_of, texts
 
 PLUGINS = ('jukebox', 'custom_votes')
 
@@ -23,19 +23,34 @@ async def queue_uids(h):
 #
 
 
-def test_list_and_search(tmp_path):
+def test_list_window_pages_search_and_wish(tmp_path):
   async def scenario():
     async with Harness(tmp_path, plugins=PLUGINS) as h:
-      h.server.maps += [h.server.make_map(i) for i in range(6, 12)]
+      h.server.maps += [h.server.make_map(i) for i in range(6, 21)] # 20 maps, 15 per page
       await h.controller.maps.refresh()
       await h.chat('bob', '/list')
-      replies = h.replies_to('bob')
-      assert replies[-9].endswith('Maps 1/2 (/jukebox <number> to wish one, /list <page> for more):')
-      assert replies[-8].endswith('1. $fffMap 1$z$s by author1')
-      await h.chat('bob', '/list 2')
-      assert h.replies_to('bob')[-1].endswith('11. $fffMap 11$z$s by author11')
+      page = h.manialink('bob')
+      assert '$fffMap 1' in texts(page) and '$fffMap 16' not in texts(page)
+      assert '$fff1 / 2' in texts(page) and '$bbbClick a map to wish it' in texts(page)
+      await h.click('bob', action_of(page, 'ArrowNext'))
+      page = h.manialink('bob')
+      assert '$fffMap 16' in texts(page) and '$ddd16.' in texts(page)
+
       await h.chat('bob', '/list map 1')
-      assert [re.search(r'\$s (\d+)\.', r).group(1) for r in h.replies_to('bob')[-3:]] == ['1', '10', '11']
+      page = h.manialink('bob')
+      assert [t[4:] for t in texts(page) if t.endswith('.')] == ['1.', '10.', '11.', '12.', '13.', '14.', '15.', '16.',
+        '17.', '18.', '19.']
+      await h.click('bob', action_of(page, '$fffMap 13'))
+      assert await queue_uids(h) == ['uid13']
+      assert h.manialink('bob') is None # closed after the wish
+
+      await h.chat('bob', '/list')
+      await h.click('bob', action_of(h.manialink('bob'), '$fffMap 4'))
+      assert 'already have a map' in h.replies_to('bob')[-1] # same rules as /jukebox
+      assert h.manialink('bob') is not None # stays open
+      await h.click('bob', action_of(h.manialink('bob'), 'Close'))
+      assert h.manialink('bob') is None
+
       await h.chat('bob', '/list nothing matches')
       assert 'No map matches' in h.replies_to('bob')[-1]
     #

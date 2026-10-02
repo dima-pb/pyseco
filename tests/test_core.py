@@ -5,7 +5,7 @@ import pytest
 from core import config, roles
 from core.controller import AuthenticationError, Controller
 from services import accounts
-from conftest import Harness, write_config
+from conftest import Harness, texts, write_config
 
 
 def run(coro):
@@ -151,10 +151,11 @@ def test_help_shows_only_allowed_commands(tmp_path):
   async def scenario():
     async with Harness(tmp_path) as h:
       await h.chat('bob', '/pyseco')
-      assert not any('/setrole' in r for r in h.replies_to('bob'))
+      assert not any('setrole' in t for t in texts(h.manialink('bob')))
       await h.chat('master', '/pyseco')
-      assert any('/setrole' in r for r in h.replies_to('master'))
-      assert not any('!whoami' in r or '/help' in r for r in h.replies_to('master')) # discord only
+      shown = texts(h.manialink('master'))
+      assert '$fff/setrole <login> <player|operator|admin>' in shown and '$dddgives a player a role' in shown
+      assert not any('whoami' in t or 'help' in t for t in shown) # discord only
     #
   #
   run(scenario())
@@ -165,7 +166,7 @@ def test_commands_of_plugins_that_are_not_loaded_are_unknown(tmp_path):
   async def scenario():
     async with Harness(tmp_path) as h:
       await h.chat('alice', '/pyseco')
-      assert not any('/link' in r for r in h.replies_to('alice')) # belongs to the discord plugin
+      assert not any('/link' in t for t in texts(h.manialink('alice'))) # belongs to the discord plugin
       count = len(h.replies_to('alice'))
       await h.chat('alice', '/link')
       assert len(h.replies_to('alice')) == count
@@ -307,6 +308,51 @@ def test_typed_server_methods(tmp_path):
         await server.get_player_info('nobody')
       #
       assert h.server.called('GetPlayerInfo')[-1] == ('nobody', 1)
+    #
+  #
+  run(scenario())
+#
+
+
+# ---- ui ----
+
+def test_windows_are_per_player_and_escape_text(tmp_path):
+  async def scenario():
+    from conftest import action_of
+    from services.windows import ListWindow, TextWidget
+    async with Harness(tmp_path) as h:
+      h.server.players['ann'] = player_info('ann', 'Ann', 7)
+      await h.server.callback('TrackMania.PlayerInfoChanged', h.server.players['ann'])
+      clicks = []
+      async def on_click(login, index):
+        clicks.append((login, index))
+      #
+      window = ListWindow(h.controller.ui, page_size=2)
+      other = ListWindow(h.controller.ui)
+      assert window.first_action != other.first_action
+      await window.open('ann', 'Title <&> "quoted"', ['a & b', '<c>', 'd'], on_click)
+      await window.open('ben', 'Other', [('x', 'y')])
+      await h.settle()
+      page = h.manialink('ann')
+      assert '$fffTitle <&> "quoted"' in texts(page) and 'a & b' in texts(page) and '<c>' in texts(page)
+      await h.click('ann', action_of(page, 'ArrowNext'))
+      await h.click('ann', action_of(h.manialink('ann'), 'd'))
+      assert clicks == [('ann', 2)]
+      assert texts(h.manialink('ben'))[:2] == ['$fffOther', 'x'] # ben's window is his own
+
+      # one window at a time: another window replaces it
+      await other.open('ben', 'Replacing', ['z'])
+      assert texts(h.manialink('ben'))[0] == '$fffReplacing'
+      assert not window.is_open('ben') and other.is_open('ben')
+
+      await h.server.callback('TrackMania.PlayerDisconnect', 'ann')
+      await h.settle()
+      assert not window.is_open('ann')
+
+      widget = TextWidget(h.controller.ui, 50, 40)
+      await widget.show('12:00')
+      xml = h.server.called('SendDisplayManialinkPage')[-1][0]
+      assert '12:00' in xml and 'id="' + widget.id + '"' in xml
     #
   #
   run(scenario())

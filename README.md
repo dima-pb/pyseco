@@ -11,7 +11,8 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `custom_votes`: A custom votes plugin that uses the native TMF voting engine. Currently only the usual replay and skip votes implemented,
     but more can very easily be added
   - `ad`: shows a clickable logo to every player that connects
-  - `jukebox`: players wish the next maps (`/list`, `/jukebox <number>`, `/nextmap`, `/history`); temporary
+  - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
+    `/nextmap`, `/history`); temporary
     (TMX) maps are removed after they were played unless an admin keeps them with `/addthis`. Replaces XAseco's
     jukebox: with XAseco running, its `plugin.rasp_jukebox.php` is replaced by the bridge from tmf-docker
     (`xaseco/addons`), so Records-Eyepiece's track list wishes maps through pyseco
@@ -54,7 +55,7 @@ type `/link` in game, then `!link <code>` in the discord channel. `!help` lists 
 - `src/core/`: the controller (`controller.py`), the server connection (`server.py`) with the server's methods
   (`server_api.py`), events, commands, roles, settings, log
 - `src/services/`: always there, used by plugins: `accounts` (roles, discord links), `players` (who is online),
-  `maps` (map list, current map, history), `chat` (messages to players)
+  `maps` (map list, current map, history), `chat` (messages to players), `ui` and `windows` (manialinks)
 - `src/storage/`: what pyseco keeps, see Data
 - `src/plugins/`: optional features, switched on in `pyseco.toml`
 
@@ -79,6 +80,13 @@ controller.server.get_player_list(100, 0)`; errors of the server raise `xmlrpc.c
 from the dedicated server's `ListMethods.html` by `tools/gen_server_api.py` (parameter names and the returned
 structures are listed there). `controller.server.call('Method', ...)` reaches any method directly.
 Messages to players: `controller.chat.announce(text)`, `controller.chat.tell(login, text)`.
+
+UI (`services/windows.py`), created in `__init__`:
+- `ListWindow(controller.ui, columns=[...])`, then `await window.open(login, title, rows, on_click)`: a window
+  with a paged list, every player has their own; `on_click(login, index)` makes the rows clickable
+- `TextWidget(controller.ui, x, y)`, then `await widget.show(text, login=None)`: text at a fixed place
+- anything else: `controller.ui.manialink_id()`, `controller.ui.actions(count, handler)` and
+  `await controller.ui.show(id, xml, login)` with the helpers in `services/ui.py`
 
 Handlers are `async` functions. Never block in a handler (no `time.sleep`, no synchronous network calls):
 everything shares one event loop.

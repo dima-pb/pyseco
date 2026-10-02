@@ -1,6 +1,7 @@
 import xmlrpc.client
 
 from core import commands, events, log
+from services.windows import ListWindow
 
 
 PREFIX = '$fb0»$z$s '
@@ -8,12 +9,15 @@ PREFIX = '$fb0»$z$s '
 
 class Chat:
   # Messages from pyseco to the players, and the game side of commands: chat starting with / runs the
-  # registered command, other chat of players is raised as events.CHAT.
+  # registered command, other chat of players is raised as events.CHAT. /pyseco shows the commands.
   # Sending never raises: a message that can't be sent is logged, the caller goes on.
 
   def __init__(self, controller):
     self.controller = controller
     controller.events.register('TrackMania.PlayerChat', self.player_chat)
+    self.help_window = ListWindow(controller.ui, width=100, columns=[34, 62])
+    controller.commands.register('pyseco', self.cmd_help, help='lists the pyseco commands you can use',
+      sources=(commands.GAME,))
   #
 
   async def announce(self, text):
@@ -59,5 +63,11 @@ class Chat:
     ctx = commands.Context(commands.GAME, login, player.nickname if player else login,
       await self.controller.accounts.role(login), words[1:], lambda reply: self.tell(login, reply))
     await self.controller.commands.run(ctx, words[0])
+  #
+
+  async def cmd_help(self, ctx):
+    rows = [('$fff/' + c.name + (' ' + c.usage if c.usage else ''), '$ddd' + c.help)
+      for c in self.controller.commands.available(ctx.role, ctx.source)]
+    await self.help_window.open(ctx.login, 'pyseco commands', rows)
   #
 #

@@ -4,6 +4,7 @@ import xmlrpc.client
 from core import commands, events, log, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
+from services.windows import ListWindow
 
 
 # Echo protocol with the XAseco side (xaseco addon plugin.rasp_jukebox.php, which stands in for RASP's jukebox):
@@ -62,6 +63,8 @@ class Jukebox(Plugin):
     controller.events.register(events.MAP_STARTED, self.map_started)
     controller.events.register(events.MAP_LIST_CHANGED, self.list_changed)
     controller.events.register('TrackMania.Echo', self.echo)
+
+    self.list_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
 
     register = controller.commands.register
     register('list', self.cmd_list, help='lists the maps on the server', usage='[page | search text]')
@@ -282,6 +285,18 @@ class Jukebox(Plugin):
         return
       #
     #
+    if ctx.source == commands.GAME:
+      rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(m['Name']), '$ddd' + (m.get('Author') or '?'))
+        for i, m in maps]
+      uids = [m['UId'] for i, m in maps]
+      async def wish(login, index):
+        await self.wish_from_window(login, uids[index])
+      #
+      searched = ctx.args and not (len(ctx.args) == 1 and ctx.args[0].isdigit())
+      title = 'Maps' + (' matching "' + ' '.join(ctx.args) + '"' if searched else '')
+      await self.list_window.open(ctx.login, title, rows, wish, page - 1, hint='Click a map to wish it')
+      return
+    #
     pages = max(1, (len(maps) + LIST_PAGE - 1) // LIST_PAGE)
     page = min(max(page, 1), pages)
     shown = maps[(page - 1) * LIST_PAGE:page * LIST_PAGE]
@@ -290,6 +305,24 @@ class Jukebox(Plugin):
       + prefix + 'list <page> for more):')
     for i, m in shown:
       await ctx.reply(self.map_line(i, m))
+    #
+  #
+
+  async def wish(self, login, display_name, role, m, reply):
+    player = self.controller.players.online.get(login)
+    nickname = player.nickname if player else display_name
+    return await self.add(Entry.from_map(m, login, nickname), role, reply)
+  #
+
+  async def wish_from_window(self, login, uid):
+    reply = lambda text: self.controller.chat.tell(login, text)
+    m = self.controller.maps.by_uid.get(uid)
+    if m is None:
+      await reply('This map is no longer on the server.')
+      return
+    #
+    if await self.wish(login, login, await self.controller.accounts.role(login), m, reply):
+      await self.list_window.close(login)
     #
   #
 
@@ -313,10 +346,7 @@ class Jukebox(Plugin):
         await ctx.reply('There is no map ' + args[0] + ', see /list.')
         return
       #
-      player = self.controller.players.online.get(ctx.login)
-      nickname = player.nickname if player else ctx.display_name
-      entry = Entry.from_map(self.controller.maps.list[number - 1], ctx.login, nickname)
-      await self.add(entry, ctx.role, ctx.reply)
+      await self.wish(ctx.login, ctx.display_name, ctx.role, self.controller.maps.list[number - 1], ctx.reply)
     elif args == ['drop']:
       index = next((i for i, e in enumerate(self.queue) if ctx.login and e.login == ctx.login), None)
       if index is None:
