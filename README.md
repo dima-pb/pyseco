@@ -35,8 +35,14 @@ or in the foreground with `cd src && ../.venv/bin/python pyseco.py`.
 SIGTERM (docker, systemd) stops the controller cleanly.
 
 ## Data
-Everything pyseco stores is in one SQLite database, `<data_dir>/pyseco.db` (players, roles, discord links, ...),
-logs are in `<data_dir>/logs`. Back up the database with `sqlite3 pyseco.db ".backup copy.db"` or while pyseco is stopped.
+What pyseco keeps (players, roles, discord links, played maps, the jukebox, ...) is defined by the interfaces in
+`src/storage/interfaces.py`. The controller and the plugins only use these interfaces, backends implement them:
+
+- `sqlite` (default): one file, `<data_dir>/pyseco.db`. Back it up with `sqlite3 pyseco.db ".backup copy.db"` or
+  while pyseco is stopped. This is the only place with SQL (`src/storage/sqlite.py`).
+- `memory`: nothing is kept when pyseco stops (tests).
+
+Choose with `backend = "..."` in the `[storage]` section. Logs are in `<data_dir>/logs`.
 
 ## Roles and commands
 Roles: player, operator, admin, masteradmin. Masteradmins are set in `pyseco.toml`, the others in game
@@ -52,8 +58,10 @@ Derive from `plugins.plugin.Plugin` and add the plugin to `AVAILABLE` in `src/pl
 - commands: `controller.commands.register(name, handler, role=accounts.ADMIN, help=..., usage=...,
   sources=(commands.GAME, commands.DISCORD))`; the handler gets a `commands.Context` (`ctx.login`, `ctx.args`,
   `await ctx.reply(text)`), raise `commands.UsageError` for wrong arguments
-- tables: `await controller.db.migrate('<plugin>', [sql_v1, sql_v2, ...])` in `start()`; never change a
-  released script, append a new one
+- data: add a store interface for the plugin's data to `src/storage/interfaces.py` (and to `Storage`), implement
+  it in every backend (`storage/sqlite.py` with its migrations, `storage/memory.py`) and extend the contract
+  tests in `tests/test_storage.py`; the plugin uses `controller.storage.<store>`. In SQLite, never change a
+  released migration script, append a new one
 
 Handlers are `async` functions; server requests are awaited, e.g. `await self.controller.call('GetChallengeList', 100, 0)`.
 Never block in a handler (no `time.sleep`, no synchronous network calls): everything shares one event loop.

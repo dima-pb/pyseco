@@ -18,6 +18,10 @@ data_dir = "data"
 # all, verbose, debug, info, warning, error, fatal
 log_level = "info"
 
+[storage]
+# sqlite: <data_dir>/pyseco.db; memory: nothing is kept when pyseco stops
+backend = "sqlite"
+
 [discord]
 # bot token from https://discord.com/developers/applications -> your app -> Bot.
 # There, also enable "Message Content Intent", otherwise the bot can't read the channel.

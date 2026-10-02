@@ -3,25 +3,6 @@ import xmlrpc.client
 import log
 
 
-MIGRATIONS = [
-  # 1
-  '''
-  CREATE TABLE maps (
-    uid TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    author TEXT NOT NULL DEFAULT '',
-    environment TEXT NOT NULL DEFAULT '',
-    first_seen TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE TABLE plays (
-    id INTEGER PRIMARY KEY,
-    uid TEXT NOT NULL REFERENCES maps(uid),
-    played_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE INDEX plays_uid ON plays (uid);
-  ''',
-]
-
 MAX_MAPS = 5000
 
 
@@ -39,7 +20,6 @@ class Maps:
   #
 
   async def start(self):
-    await self.controller.db.migrate('maps', MIGRATIONS)
     # while the server is still loading it has no map yet: BeginChallenge / ChallengeListModified will tell
     try:
       await self.refresh()
@@ -52,9 +32,7 @@ class Maps:
   async def refresh(self):
     self.list = await self.controller.call('GetChallengeList', MAX_MAPS, 0)
     self.by_uid = {m['UId']: m for m in self.list}
-    await self.controller.db.executemany(
-      'INSERT OR IGNORE INTO maps (uid, name, author, environment) VALUES (?, ?, ?, ?)',
-      [(m['UId'], m['Name'], m.get('Author', ''), m.get('Environment', '')) for m in self.list])
+    await self.controller.storage.maps.known(self.list)
   #
 
   async def list_modified(self, params):
@@ -68,18 +46,14 @@ class Maps:
       await self.refresh()
     #
     self.current = params[0]
-    uid = self.current['UId']
-    await self.controller.db.execute('INSERT OR IGNORE INTO maps (uid, name, author, environment) VALUES (?, ?, ?, ?)',
-      (uid, self.current['Name'], self.current.get('Author', ''), self.current.get('Environment', '')))
-    await self.controller.db.execute('INSERT INTO plays (uid) VALUES (?)', (uid,))
+    await self.controller.storage.maps.known([self.current])
+    await self.controller.storage.maps.played(self.current['UId'])
     await self.controller.raise_event('MapStarted', self.current)
   #
 
   async def history(self, count):
     # the most recently started maps, newest first (the current one included): [(uid, name, played_at)]
-    rows = await self.controller.db.fetchall(
-      'SELECT p.uid, m.name, p.played_at FROM plays p JOIN maps m ON m.uid = p.uid ORDER BY p.id DESC LIMIT ?', (count,))
-    return [(r['uid'], r['name'], r['played_at']) for r in rows]
+    return [(p.uid, p.name, p.played_at) for p in await self.controller.storage.maps.history(count)]
   #
 
   async def recent_uids(self, count):

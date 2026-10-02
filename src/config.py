@@ -2,6 +2,7 @@ import os
 import tomllib
 
 
+STORAGE_BACKENDS = ('sqlite', 'memory')
 LOG_LEVELS = {'all': 0, 'verbose': 1, 'debug': 2, 'info': 3, 'warning': 4, 'error': 5, 'fatal': 6, 'disabled': 7}
 
 
@@ -47,6 +48,10 @@ class Config:
     self.log_level = LOG_LEVELS[level]
     self.log_path = os.path.join(self.data_dir, 'logs')
     self.database = os.path.join(self.data_dir, 'pyseco.db')
+    backend = self.section('storage').get('backend', 'sqlite')
+    if backend not in STORAGE_BACKENDS:
+      raise ConfigError('[storage] backend must be one of ' + ', '.join(STORAGE_BACKENDS))
+    #
   #
 
   def section(self, name):

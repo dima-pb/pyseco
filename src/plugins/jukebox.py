@@ -16,28 +16,6 @@ FROM_XASECO = 'pyseco-shim'
 
 LIST_PAGE = 8
 
-MIGRATIONS = [
-  # 1
-  '''
-  CREATE TABLE jukebox_queue (
-    position INTEGER PRIMARY KEY,
-    uid TEXT NOT NULL,
-    filename TEXT NOT NULL,
-    name TEXT NOT NULL,
-    environment TEXT NOT NULL DEFAULT '',
-    login TEXT NOT NULL DEFAULT '',
-    nickname TEXT NOT NULL DEFAULT '',
-    source TEXT NOT NULL
-  );
-  CREATE TABLE temporary_maps (
-    uid TEXT PRIMARY KEY,
-    filename TEXT NOT NULL,
-    added_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  ''',
-]
-
-
 class Entry:
   # one map in the jukebox; source: Jukebox, Replay, TMX, Admin, ...
 
@@ -78,7 +56,8 @@ class Jukebox(Plugin):
     settings = controller.settings('jukebox')
     self.recent = int(settings.get('recent', 10))
     self.per_player = int(settings.get('per_player', 1))
-    self.queue = []
+    self.store = None # storage.interfaces.JukeboxStore
+    self.queue = [] # [Entry], stored as QueuedMap (same fields)
     self.temporary = {} # uid -> filename of maps to remove after they were played
     self.playing_temporary = None # uid of the temporary map being played
 
@@ -96,12 +75,10 @@ class Jukebox(Plugin):
   #
 
   async def start(self):
-    db = self.controller.db
-    await db.migrate('jukebox', MIGRATIONS)
-    rows = await db.fetchall('SELECT * FROM jukebox_queue ORDER BY position')
-    self.queue = [Entry(r['uid'], r['filename'], r['name'], r['environment'], r['login'], r['nickname'], r['source'])
-      for r in rows]
-    self.temporary = {r['uid']: r['filename'] for r in await db.fetchall('SELECT uid, filename FROM temporary_maps')}
+    self.store = self.controller.storage.jukebox
+    self.queue = [Entry(q.uid, q.filename, q.name, q.environment, q.login, q.nickname, q.source)
+      for q in await self.store.queue()]
+    self.temporary = await self.store.temporary_maps()
     current = self.controller.maps.current
     if current is not None and current['UId'] in self.temporary:
       self.playing_temporary = current['UId']
@@ -156,8 +133,7 @@ class Jukebox(Plugin):
     #
     if temporary:
       self.temporary[entry.uid] = entry.filename
-      await self.controller.db.execute('INSERT OR REPLACE INTO temporary_maps (uid, filename) VALUES (?, ?)',
-        (entry.uid, entry.filename))
+      await self.store.add_temporary(entry.uid, entry.filename)
     #
     if front:
       self.queue.insert(0, entry)
@@ -182,11 +158,7 @@ class Jukebox(Plugin):
   #
 
   async def changed(self):
-    await self.controller.db.transaction(lambda conn: (
-      conn.execute('DELETE FROM jukebox_queue'),
-      conn.executemany('INSERT INTO jukebox_queue (position, uid, filename, name, environment, login, nickname, source) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [(i, e.uid, e.filename, e.name, e.environment, e.login, e.nickname, e.source) for i, e in enumerate(self.queue)])))
+    await self.store.set_queue(self.queue)
     await self.apply_next()
     await self.publish()
   #
@@ -225,7 +197,7 @@ class Jukebox(Plugin):
       return # kept (/addthis) or wished again: it stays until it was played the last time
     #
     filename = self.temporary.pop(uid)
-    await self.controller.db.execute('DELETE FROM temporary_maps WHERE uid = ?', (uid,))
+    await self.store.remove_temporary(uid)
     try:
       await self.controller.call('RemoveChallenge', filename)
     except xmlrpc.client.Fault as fault:
@@ -402,7 +374,7 @@ class Jukebox(Plugin):
     #
     del self.temporary[current['UId']]
     self.playing_temporary = None
-    await self.controller.db.execute('DELETE FROM temporary_maps WHERE uid = ?', (current['UId'],))
+    await self.store.remove_temporary(current['UId'])
     await self.publish()
     await ctx.reply('$fff' + utilities.strip_colors(current['Name']) + '$z$s stays on the server. '
       'To keep it after a server restart, save the map list (/admin writetracklist).')

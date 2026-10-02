@@ -1,52 +1,14 @@
 import asyncio
-import sqlite3
 
 import pytest
 
 import accounts
 import config
-import db
 from conftest import Harness, write_config
 
 
 def run(coro):
   return asyncio.run(coro)
-#
-
-
-# ---- database ----
-
-def test_migrations_run_once_and_in_order(tmp_path):
-  async def scenario():
-    database = db.Database(str(tmp_path / 'test.db'))
-    await database.open()
-    v1 = ['CREATE TABLE t (a INTEGER);']
-    assert await database.migrate('comp', v1) == (0, 1)
-    await database.execute('INSERT INTO t (a) VALUES (1)')
-    assert await database.migrate('comp', v1) == (1, 1) # nothing to do
-    v2 = v1 + ['ALTER TABLE t ADD COLUMN b TEXT;']
-    assert await database.migrate('comp', v2) == (1, 2)
-    row = await database.fetchone('SELECT a, b FROM t')
-    assert (row['a'], row['b']) == (1, None) # data kept
-    await database.close()
-  #
-  run(scenario())
-#
-
-
-def test_failed_migration_changes_nothing(tmp_path):
-  async def scenario():
-    database = db.Database(str(tmp_path / 'test.db'))
-    await database.open()
-    await database.migrate('comp', ['CREATE TABLE t (a INTEGER);'])
-    with pytest.raises(sqlite3.Error):
-      await database.migrate('comp', ['CREATE TABLE t (a INTEGER);', 'CREATE TABLE u (x); THIS IS NOT SQL;'])
-    #
-    assert await database.fetchone("SELECT name FROM sqlite_master WHERE name = 'u'") is None
-    assert (await database.fetchone("SELECT version FROM schema_versions WHERE component = 'comp'"))[0] == 1
-    await database.close()
-  #
-  run(scenario())
 #
 
 
@@ -71,17 +33,27 @@ def test_config_errors_are_readable(tmp_path):
   with pytest.raises(config.ConfigError, match='not valid TOML'):
     config.Config(str(bad))
   #
+  with pytest.raises(config.ConfigError, match='backend must be one of sqlite, memory'):
+    config.Config(write_config(tmp_path, 5000, '[storage]\nbackend = "postgres"\n'))
+  #
 #
 
 
-# ---- accounts ----
+# ---- accounts (on top of any storage backend) ----
 
-def test_roles_and_staff(tmp_path):
+@pytest.fixture(params=['sqlite', 'memory'])
+def make_storage(request, tmp_path):
+  from storage.memory import MemoryStorage
+  from storage.sqlite import SqliteStorage
+  return lambda: SqliteStorage(str(tmp_path / 'test.db')) if request.param == 'sqlite' else MemoryStorage()
+#
+
+
+def test_roles_and_staff(make_storage):
   async def scenario():
-    database = db.Database(str(tmp_path / 'test.db'))
-    await database.open()
-    acc = accounts.Accounts(database, ['boss'])
-    await acc.start()
+    storage = make_storage()
+    await storage.open()
+    acc = accounts.Accounts(storage.players, ['boss'])
     assert await acc.role('boss') == accounts.MASTERADMIN
     assert await acc.role('nobody') == accounts.PLAYER
     await acc.player_seen('op', '$f00Op', visit=True)
@@ -91,20 +63,22 @@ def test_roles_and_staff(tmp_path):
     with pytest.raises(ValueError):
       await acc.set_role('boss', accounts.PLAYER)
     #
+    with pytest.raises(ValueError):
+      await acc.set_role('op', accounts.MASTERADMIN)
+    #
     assert [(login, role) for login, _, role in await acc.staff()] == [
       ('boss', accounts.MASTERADMIN), ('adm', accounts.ADMIN), ('op', accounts.OPERATOR)]
-    await database.close()
+    await storage.close()
   #
   run(scenario())
 #
 
 
-def test_discord_link_codes(tmp_path):
+def test_discord_link_codes(make_storage):
   async def scenario():
-    database = db.Database(str(tmp_path / 'test.db'))
-    await database.open()
-    acc = accounts.Accounts(database, [])
-    await acc.start()
+    storage = make_storage()
+    await storage.open()
+    acc = accounts.Accounts(storage.players, [])
     code = acc.create_link_code('alice')
     assert await acc.redeem_link_code('999999' if code != '999999' else '111111', 42) is None
     assert await acc.redeem_link_code(code, 42) == 'alice'
@@ -112,7 +86,7 @@ def test_discord_link_codes(tmp_path):
     assert await acc.login_for_discord(42) == 'alice'
     assert await acc.unlink_discord(42)
     assert await acc.login_for_discord(42) is None
-    await database.close()
+    await storage.close()
   #
   run(scenario())
 #
@@ -207,8 +181,7 @@ def test_players_are_remembered(tmp_path):
       await h.server.callback('TrackMania.PlayerConnect', 'dave', False)
       await h.server.callback('TrackMania.PlayerInfoChanged', info)
       await h.settle()
-      row = await h.controller.db.fetchone('SELECT nickname, visits FROM players WHERE login = ?', ('dave',))
-      assert (row['nickname'], row['visits']) == ('$f00Dave', 1)
+      assert (await h.controller.storage.players.get('dave')).nickname == '$f00Dave'
     #
   #
   run(scenario())

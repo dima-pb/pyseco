@@ -10,11 +10,11 @@ import accounts
 import client
 import commands
 import config
-import db
 import log
 import maps
 import messages
 import player
+import storage
 import utilities
 from plugins.plugins import Plugins
 
@@ -32,8 +32,8 @@ class TMController:
   def __init__(self, config, logger):
     self.config = config
     self.logger = logger
-    self.db = db.Database(config.database)
-    self.accounts = accounts.Accounts(self.db, config.masteradmins)
+    self.storage = storage.create(config) # everything pyseco keeps, see storage/interfaces.py
+    self.accounts = accounts.Accounts(self.storage.players, config.masteradmins)
     self.commands = commands.Commands(logger)
     self.client = client.TMClient(config.url, config.port, self.queue_callback)
     self.maps = None
@@ -55,12 +55,11 @@ class TMController:
 
   async def run(self):
     os.makedirs(self.config.data_dir, exist_ok=True)
-    await self.db.open()
+    await self.storage.open()
     try:
-      await self.accounts.start()
       await self.run_connected()
     finally:
-      await self.db.close()
+      await self.storage.close()
     #
   #
   

@@ -224,3 +224,21 @@ def test_nextmap_and_history(tmp_path):
   #
   run(scenario())
 #
+
+
+def test_jukebox_with_the_memory_backend(tmp_path):
+  # the controller and the plugins only use the storage interface
+  async def scenario():
+    async with Harness(tmp_path, '[storage]\nbackend = "memory"\n', plugins=PLUGINS) as h:
+      await h.chat('bob', '/jb 3')
+      await h.chat('master', '/setrole bob operator')
+      await h.server.play_next() # map 3 (from the jukebox)
+      await h.server.play_next() # map 4
+      await h.settle()
+      await h.chat('bob', '/history')
+      assert '1. $fffMap 3$z$s' in h.replies_to('bob')[-1]
+      assert not (tmp_path / 'data' / 'pyseco.db').exists()
+    #
+  #
+  run(scenario())
+#
