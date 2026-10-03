@@ -152,21 +152,24 @@ class TextWidget:
   #   widget = TextWidget(controller.ui, 'clock', x=50, y=40)
   #   await widget.show('12:00')            to everybody; show(text, login) to one player
   # x, y: top left corner, x -64 (left) .. 64 (right), y 48 (top) .. -48 (bottom). With background=False only
-  # the text is shown. Server owners can move a widget in pyseco.toml by its name:
+  # the text is shown. on_click(login) is awaited when a player clicks the widget (with a background).
+  # Server owners can move a widget in pyseco.toml by its name:
   #   [widgets.clock]
   #   x = 40
   #   y = 20
 
-  def __init__(self, ui, name, x, y, width=14, height=4, size=2, background=True):
+  def __init__(self, ui, name, x, y, width=14, height=4, size=2, background=True, on_click=None):
     self.ui = ui
     x, y = ui.position(name, x, y)
     self.x, self.y, self.width, self.height, self.size = x, y, width, height, size
     self.background = background
     self.id = ui.manialink_id()
+    self.action = ui.actions(1, lambda login, offset: on_click(login)) if on_click else None
   #
 
   async def show(self, text, login=None):
-    parts = [quad(0, 0, 0, self.width, self.height, *WINDOW_STYLE) for _ in range(WINDOW_LAYERS)] if self.background else []
+    parts = [quad(0, 0, 0, self.width, self.height, *WINDOW_STYLE, action=self.action)
+      for _ in range(WINDOW_LAYERS)] if self.background else []
     parts.append(label(self.width / 2, -self.height / 2, 1, text, self.width - 1, self.height - 1, size=self.size,
       halign='center', valign='center'))
     await self.ui.show(self.id, frame(''.join(parts), self.x, self.y, 10), login)

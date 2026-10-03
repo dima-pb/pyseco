@@ -37,7 +37,8 @@ def parse_time(text):
 
 class Flexitime(Plugin):
   # The time limit of a map, run by pyseco instead of the server, so admins can change it while the map
-  # is played. When the time is up, the next map starts. A clock shows the time left. Only in time attack.
+  # is played. When the time is up, the next map starts. A clock shows the time left; admins click it to pause
+  # the time or let it run again. Only in time attack.
   # The time runs from the start of the race on, not while the map loads.
   # The server's own time limit is switched off (it takes effect from the next map on).
   #
@@ -50,7 +51,8 @@ class Flexitime(Plugin):
     settings = controller.settings('flexitime')
     self.minutes = float(settings.get('minutes', 60))
     # below the server's box with the previous and best time
-    self.widget = TextWidget(controller.ui, 'flexitime', x=49, y=32, width=14, height=4.5, size=3)
+    self.widget = TextWidget(controller.ui, 'flexitime', x=49, y=32, width=14, height=4.5, size=3,
+      on_click=self.clicked)
     self.left = None # seconds left on this map, None while no map is timed (podium, other game modes)
     self.paused = False
     self.racing = False # the race runs, the time counts
@@ -150,6 +152,15 @@ class Flexitime(Plugin):
       return
     #
     await self.show()
+  #
+
+  async def clicked(self, login):
+    # a click on the clock pauses the time or lets it run again, like /timeleft pause / resume (admins)
+    player = self.controller.players.online.get(login)
+    ctx = commands.Context(commands.GAME, login, player.nickname if player else login,
+      await self.controller.accounts.role(login), ['resume' if self.paused else 'pause'],
+      lambda text: self.controller.chat.tell(login, text))
+    await self.cmd_timeleft(ctx)
   #
 
   async def cmd_timeleft(self, ctx):

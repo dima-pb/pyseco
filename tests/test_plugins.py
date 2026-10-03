@@ -118,3 +118,25 @@ def test_flexitime_does_not_restart_a_map_with_players(tmp_path):
   #
   run(scenario())
 #
+
+
+def test_a_click_on_the_clock_pauses_and_resumes(tmp_path):
+  async def scenario():
+    async with Harness(tmp_path, plugins=('flexitime',), timer=False) as h:
+      flexi = h.plugin('flexitime')
+      await h.join('bob')
+      await h.click('bob', flexi.widget.action)
+      assert not flexi.paused and 'You need to be admin' in h.replies_to('bob')[-1]
+      await h.join('master')
+      await h.click('master', flexi.widget.action)
+      assert flexi.paused and 'paused the time' in h.announcements()[-1]
+      await h.tick(3)
+      assert flexi.left == 3600
+      await h.click('master', flexi.widget.action)
+      assert not flexi.paused and 'let the time run again' in h.announcements()[-1]
+      clock = h.server.called('SendDisplayManialinkPage')[-1][0]
+      assert 'action="' + str(flexi.widget.action) + '"' in clock # the clock is clickable
+    #
+  #
+  run(scenario())
+#
