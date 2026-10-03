@@ -9,9 +9,9 @@ Supports plugins (I shamelessly stole the architecture for those from (x)aseco).
 Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `discord`: A discord bot that synchronises chat of a Trackmania server with a discord channel-chat, posts new
     local and Dedimania records, and runs commands (`!name`); a command that only tells the game answers "done".
+    With an invite link, a small button in game opens it
   - `custom_votes`: A custom votes plugin that uses the native TMF voting engine. Currently only the usual replay and skip votes implemented,
     but more can very easily be added
-  - `ad`: shows a clickable logo to every player that connects
   - `welcome`: greets players when they join, tells everybody who comes and goes
   - `flexitime`: the time limit of a map, kept by pyseco with a clock on screen; admins change it while the map
     is played (`/timeleft 30`, `/timeleft +10`, `/timeleft pause`)

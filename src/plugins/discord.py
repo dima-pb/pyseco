@@ -7,6 +7,7 @@ from core.text import strip_colors
 from plugins.plugin import Plugin
 from services import ui
 from services.rankings import difference, ordinal, race_time
+from services.windows import ROW_STYLE
 
 
 MAX_MESSAGE_LENGTH = 2000 # discord limit
@@ -33,7 +34,8 @@ class Discord(Plugin):
   # Settings ([discord] in pyseco.toml):
   #   token = "..."              bot token
   #   channel_id = 123           channel mirrored with the server chat
-  #   invite = "discord.gg/..."  shown in game next to discord names (optional)
+  #   invite = "discord.gg/..."  shown in game next to discord names and as a button (optional)
+  #   button = true              the button that opens the invite (the widget "discord", [widgets.discord] moves it)
   #   prefix = "!"               command prefix (optional)
   #   local_records = 0          new local records up to this rank are posted (0: none)
   #   dedimania = 30             the same for Dedimania records
@@ -49,6 +51,10 @@ class Discord(Plugin):
       raise Exception('token and channel_id (a number) must be set in the [discord] section of pyseco.toml')
     #
     self.invite = str(settings.get('invite', '')).strip()
+    self.button = bool(settings.get('button', True)) and bool(self.invite)
+    self.button_id = controller.ui.manialink_id()
+    # below the game's ranking box at the top left
+    self.button_x, self.button_y = controller.ui.position('discord', -63.5, 27.8)
     self.prefix = str(settings.get('prefix', '!')).strip() or '!'
     self.record_ranks = {'local': int(settings.get('local_records', 0)), 'dedimania': int(settings.get('dedimania', 30))}
     self.record_names = {'local': 'local', 'dedimania': 'Dedimania'}
@@ -79,6 +85,9 @@ class Discord(Plugin):
   #
 
   async def start(self):
+    if self.button:
+      await self.show_button()
+    #
     self.sender_task = asyncio.create_task(self.sender())
     self.client_task = asyncio.create_task(self.client.start(self.bot_token))
     self.client_task.add_done_callback(self.client_stopped)
@@ -87,6 +96,9 @@ class Discord(Plugin):
   async def stop(self):
     if self.sender_task is not None:
       self.sender_task.cancel()
+    #
+    if self.button:
+      await self.controller.ui.hide(self.button_id)
     #
     await self.client.close()
   #
@@ -150,7 +162,18 @@ class Discord(Plugin):
     self.send(self.player_name(message.player) + ': ' + discord.utils.escape_markdown(message.text))
   #
 
+  async def show_button(self, login=None):
+    # a small button that opens the invite link
+    xml = ui.frame(ui.quad(0, 0, 0, 7, 2, *ROW_STYLE, url=self.invite)
+      + ui.label(3.5, -1, 1, '$fffDiscord', 6.4, 1.6, size=1, halign='center', valign='center'),
+      self.button_x, self.button_y, 10)
+    await self.controller.ui.show(self.button_id, xml, login)
+  #
+
   async def player_connect(self, player):
+    if self.button:
+      await self.show_button(player.login)
+    #
     self.send(self.player_name(player) + ' connected. (' + str(self.controller.players.count()) + ' online)')
   #
 

@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, admin_panel, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
+# plugins to load: admin_panel, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -33,8 +33,10 @@ backend = "sqlite"
 token = ""
 # channel mirrored with the server chat (developer mode: right click the channel -> Copy Channel ID)
 channel_id = 0
-# shown in game next to the names of discord users (optional)
+# shown in game next to the names of discord users and as a button (optional)
 invite = ""
+# the button that opens the invite link (with an invite)
+button = true
 # prefix of bot commands in the channel
 prefix = "!"
 # new local / Dedimania records up to this rank are posted in the channel (0: none)

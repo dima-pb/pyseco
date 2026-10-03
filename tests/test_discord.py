@@ -118,3 +118,18 @@ def test_records_are_posted(tmp_path):
   #
   asyncio.run(scenario())
 #
+
+
+def test_invite_button(tmp_path):
+  async def scenario():
+    async with Harness(tmp_path, DISCORD_CONFIG) as h:
+      plugin = await discord_plugin(h)
+      await h.join('ann', 'Ann')
+      button = h.manialink('ann', plugin.button_id)
+      assert [q.get('url') for q in button.iter('quad')] == ['discord.gg/test'] # TM adds http:// itself
+      assert [l.get('text') for l in button.iter('label')] == ['$fffDiscord']
+      await plugin.stop()
+    #
+  #
+  asyncio.run(scenario())
+#
