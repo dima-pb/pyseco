@@ -7,6 +7,8 @@ from services.windows import TextWidget
 
 
 TIME_ATTACK = 1
+MAX_SECONDS = 12 * 3600
+TIME = re.compile(r'^([+-]?)(\d+)(?:[.,:](\d+))?$')
 STATUS_PLAY = 4 # 'Running - Play': the race runs (before: loading, synchronization)
 
 
@@ -15,6 +17,21 @@ def clock(seconds):
   hours, rest = divmod(max(seconds, 0), 3600)
   minutes, seconds = divmod(rest, 60)
   return (str(hours) + ':' + str(minutes).zfill(2) if hours else str(minutes)) + ':' + str(seconds).zfill(2)
+#
+
+
+def parse_time(text):
+  # '30' -> ('', 1800), '+1.30' / '+1,30' / '+1:30' -> ('+', 90): minutes, optionally with seconds after the separator;
+  # raises UsageError with what is wrong
+  match = TIME.match(text)
+  if not match:
+    raise commands.UsageError()
+  #
+  sign, minutes, seconds = match.group(1), int(match.group(2)), match.group(3)
+  if seconds is not None and (len(seconds) != 2 or int(seconds) > 59):
+    raise commands.UsageError('Seconds come as two digits from 00 to 59 after the separator, e.g. 1.05 or 1.50.')
+  #
+  return sign, minutes * 60 + int(seconds or 0)
 #
 
 
@@ -44,7 +61,7 @@ class Flexitime(Plugin):
     controller.events.register(events.SECOND_PASSED, self.second_passed)
     controller.events.register(events.PLAYER_JOINED, self.player_joined)
     controller.commands.register('timeleft', self.cmd_timeleft, help='shows the time left on this map; admins change it',
-      usage='[<minutes> | +<minutes> | -<minutes> | pause | resume]')
+      usage='[<min>[.<sec>] | +<min>[.<sec>] | -<min>[.<sec>] | pause | resume]')
   #
 
   async def start(self):
@@ -153,16 +170,26 @@ class Flexitime(Plugin):
       return
     #
     arg = ctx.args[0].lower()
-    match = re.match(r'^([+-]?)(\d+(?:\.\d+)?)$', arg)
+    if len(ctx.args) != 1:
+      raise commands.UsageError()
+    #
     if arg in ('pause', 'resume'):
       self.paused = arg == 'pause'
       text = 'paused the time' if self.paused else 'let the time run again'
-    elif match and len(ctx.args) == 1:
-      sign, seconds = match.group(1), int(float(match.group(2)) * 60)
-      self.left = max(self.left + seconds if sign == '+' else self.left - seconds if sign == '-' else seconds, 1)
-      text = 'set the time left to $fff' + clock(self.left) + '$z$s'
     else:
-      raise commands.UsageError()
+      sign, seconds = parse_time(arg)
+      left = self.left + seconds if sign == '+' else self.left - seconds if sign == '-' else seconds
+      if left < 1:
+        await ctx.reply('That leaves no time: only $fff' + clock(self.left) + '$z$s are left.' if sign == '-'
+          else 'The time must be more than 0.')
+        return
+      #
+      if left > MAX_SECONDS:
+        await ctx.reply('At most 12 hours, the time is set to 12 hours.')
+        left = MAX_SECONDS
+      #
+      self.left = left
+      text = 'set the time left to $fff' + clock(self.left) + '$z$s'
     #
     self.log(ctx.login + ' ' + text)
     await self.controller.chat.announce('$fff' + ctx.display_name + '$z$s ' + text + '.')

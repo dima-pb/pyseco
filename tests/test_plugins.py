@@ -50,16 +50,28 @@ def test_flexitime_counts_down_and_skips(tmp_path):
       assert h.replies_to('bob')[-1].endswith('Time left on this map: $fff2:00$z$s.')
       await h.chat('bob', '/timeleft 10')
       assert 'You need to be admin' in h.replies_to('bob')[-1]
-      await h.chat('adm', '/timeleft +1.5')
+      await h.chat('adm', '/timeleft +1.30')
       assert flexi.left == 210 and 'set the time left to $fff3:30' in h.announcements()[-1]
       await h.chat('adm', '/timeleft pause')
       await h.tick(5)
       assert flexi.left == 210 and 'paused' in h.server.called('SendDisplayManialinkPage')[-1][0]
       await h.chat('adm', '/timeleft resume')
-      await h.chat('adm', '/timeleft 0.1')
-      assert flexi.left == 6
-      await h.chat('adm', '/timeleft soon')
-      assert 'Usage' in h.replies_to('adm')[-1]
+      for arg, left in (('2,05', 125), ('-0:05', 120), ('90', 5400), ('720', 43200), ('0.06', 6)):
+        await h.chat('adm', '/timeleft ' + arg)
+        assert flexi.left == left, arg
+      #
+      for arg, problem in (('1.5', 'two digits from 00 to 59'), ('1.75', 'two digits from 00 to 59'), ('soon', 'Usage'),
+          ('-1', 'That leaves no time: only $fff0:06'), ('0', 'more than 0'), ('1 2', 'Usage')):
+        await h.chat('adm', '/timeleft ' + arg)
+        assert problem in h.replies_to('adm')[-1] and flexi.left == 6, arg
+      #
+      for arg in ('720.01', '+720'): # too much: 12 hours
+        await h.chat('adm', '/timeleft 0.06')
+        await h.chat('adm', '/timeleft ' + arg)
+        assert 'At most 12 hours, the time is set to 12 hours.' in h.replies_to('adm')[-1] and flexi.left == 43200, arg
+        assert 'set the time left to $fff12:00:00' in h.announcements()[-1]
+      #
+      await h.chat('adm', '/timeleft 0.06')
 
       await h.tick(6)
       assert 'Time is up' in h.announcements()[-1] and h.server.called('NextChallenge')
