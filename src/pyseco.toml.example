@@ -37,6 +37,9 @@ channel_id = 0
 invite = ""
 # prefix of bot commands in the channel
 prefix = "!"
+# new local / Dedimania records up to this rank are posted in the channel (0: none)
+local_records = 0
+dedimania = 30
 
 [jukebox]
 # players can't wish one of the last <recent> maps (operators and above can)

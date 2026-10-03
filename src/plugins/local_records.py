@@ -83,6 +83,8 @@ class LocalRecords(Plugin):
     await self.tell(finish.player, finish.time, old, old_rank, rank)
     if rank is not None:
       await self.show_all()
+      await self.controller.events.emit(events.RECORD, events.NewRecord('local', finish.player, finish.time, rank + 1,
+        old.time if old else None, finish.map))
     #
   #
 

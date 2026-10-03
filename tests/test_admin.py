@@ -99,3 +99,21 @@ def test_admin_panel(tmp_path):
   #
   run(scenario())
 #
+
+
+def test_a_refusing_server_is_told(tmp_path):
+  async def scenario():
+    import xmlrpc.client
+    async with Harness(tmp_path) as h:
+      def busy():
+        raise xmlrpc.client.Fault(-1000, 'Change in progress.')
+      #
+      h.server.handlers['NextChallenge'] = busy
+      count = len(h.announcements())
+      await h.chat('master', '/admin next')
+      assert h.replies_to('master')[-1].endswith('The server refused: Change in progress. Try again in a moment.')
+      assert len(h.announcements()) == count # nothing announced
+    #
+  #
+  run(scenario())
+#

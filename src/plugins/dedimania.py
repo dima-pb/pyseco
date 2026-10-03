@@ -409,6 +409,8 @@ class Dedimania(Plugin):
     #
     self.log(login + ' ' + race_time(time_) + ': Dedimania rank ' + str(rank + 1))
     await self.show_all()
+    await self.controller.events.emit(events.RECORD, events.NewRecord('dedimania', finish.player, time_, rank + 1,
+      old.time if old else None, finish.map))
   #
 
 

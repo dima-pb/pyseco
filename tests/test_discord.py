@@ -59,8 +59,8 @@ def test_discord_commands_use_linked_roles(tmp_path):
       await h.chat('master', '/link')
       code = h.replies_to('master')[-1].split('!link ')[1].split('$')[0]
       assert 'Linked to master (masteradmin)' in await say(plugin, 42, '!link ' + code)
-      assert 'Linked to master' in await say(plugin, 42, '!whoami')
-      await say(plugin, 42, '!admin next')
+      assert await say(plugin, 42, '!whoami') == 'Linked to master (masteradmin).' # answered itself: no done
+      assert '!admin next - done.' in await say(plugin, 42, '!admin next') # only the game was told: done
       assert h.server.called('NextChallenge')
       assert '$fffUser42$z$s (discord) skipped to the next map.' in h.announcements()[-1]
 
@@ -87,6 +87,32 @@ def test_discord_chat_goes_to_game(tmp_path):
       assert sent.startswith('[User7@$l[discord.gg/test]discord$l]') and sent.endswith('hello $f00game')
       await say(plugin, 7, 'other channel', channel_id=999) # ignored
       assert len(h.server.called('ChatSendServerMessage')) == 1
+      await plugin.stop()
+    #
+  #
+  asyncio.run(scenario())
+#
+
+
+def test_records_are_posted(tmp_path):
+  async def scenario():
+    config = DISCORD_CONFIG + 'local_records = 2\n'
+    async with Harness(tmp_path, config, plugins=('local_records',)) as h:
+      plugin = await discord_plugin(h)
+      for login in ('ann', 'bob', 'cid'):
+        await h.join(login, login.capitalize())
+      #
+      plugin.channel.sent.clear()
+      await h.drive('ann', [3000, 9080])
+      await h.drive('bob', [3000, 9050])
+      await h.drive('cid', [3000, 9100]) # 3rd: not posted
+      await h.drive('ann', [3000, 9000])
+      await asyncio.sleep(0.1)
+      sent = '\n'.join(plugin.channel.sent)
+      assert '**Ann** [ann] drove the **1st** local record on **Map 1**: **0:09.08**' in sent
+      assert '**Bob** [bob] drove the **1st** local record' in sent
+      assert 'Cid' not in sent
+      assert '**Ann** [ann] improved to the **1st** local record on **Map 1**: **0:09.00** (-0.08)' in sent
       await plugin.stop()
     #
   #

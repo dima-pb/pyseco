@@ -16,7 +16,20 @@ PLAYLIST_CHANGED = 'PlaylistChanged'   # None; requests were added or removed, s
 PLAYER_FINISHED = 'PlayerFinished'     # services.race.Finish: a player crossed the finish line
 CHECKPOINT = 'Checkpoint'              # services.race.Checkpoint: a player passed a checkpoint
 ROLE_CHANGED = 'RoleChanged'           # login whose role was changed with /setrole
+RECORD = 'Record'                      # NewRecord: a player drove a new record (local, Dedimania, ...)
 SECOND_PASSED = 'SecondPassed'         # None
+
+
+class NewRecord:
+  def __init__(self, kind, player, time, rank, old_time, map):
+    self.kind = kind # 'local', 'dedimania'
+    self.player = player # services.players.Player
+    self.time = time # ms
+    self.rank = rank # 1 is the best
+    self.old_time = old_time # the player's record before, None if it is the first
+    self.map = map # server_api.ChallengeInfo
+  #
+#
 
 
 class ChatMessage:

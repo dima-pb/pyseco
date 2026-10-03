@@ -226,13 +226,13 @@ class Playlist:
   #
 
   async def cmd_next(self, ctx):
+    await self.controller.server.next_challenge() # first: the server may refuse (e.g. while the map changes)
     await self.controller.chat.announce(self.controller.admin.who(ctx) + ' skipped to the next map.')
-    await self.controller.server.next_challenge()
   #
 
   async def cmd_restart(self, ctx):
-    await self.controller.chat.announce(self.controller.admin.who(ctx) + ' restarts the map.')
     await self.controller.server.challenge_restart()
+    await self.controller.chat.announce(self.controller.admin.who(ctx) + ' restarts the map.')
   #
 
   async def cmd_replay(self, ctx):

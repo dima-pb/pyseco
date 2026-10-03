@@ -1,4 +1,6 @@
-from core import commands, roles
+import xmlrpc.client
+
+from core import commands, log, roles
 from services.windows import ListWindow
 
 
@@ -59,6 +61,10 @@ class Admin:
     #
     try:
       await action.handler(ctx)
+    except xmlrpc.client.Fault as fault:
+      self.controller.logger.message('/admin ' + name + ': ' + fault.faultString, log.LOG_WARNING)
+      reason = fault.faultString.rstrip('.')
+      await ctx.reply('The server refused: ' + reason + ('. Try again in a moment.' if 'progress' in reason else '.'))
     except commands.UsageError as exc:
       prefix = '/' if ctx.source == commands.GAME else '!'
       await ctx.reply((str(exc) + ' ' if str(exc) else '') + 'Usage: ' + prefix + 'admin ' + name

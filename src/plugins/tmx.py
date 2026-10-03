@@ -295,6 +295,10 @@ class Tmx(Plugin):
     self.log((ctx.login or ctx.display_name) + ' added TMX ' + str(track_id) + ' ' + track['TrackName'])
     await self.controller.chat.announce('$fff' + nickname + '$z$s added $fff' + track['TrackName'] + '$z$s from TMX ('
       + str(track_id) + ').')
+    if ctx.source != commands.GAME: # the game saw it
+      await ctx.reply('Added ' + track['TrackName'] + ' (' + str(track_id) + ') from TMX, it comes ' +
+        ('next.' if self.controller.playlist.position_of(track['UId']) == 0 else 'soon.'))
+    #
     return track
   #
 
@@ -302,6 +306,7 @@ class Tmx(Plugin):
     if not ctx.args or not all(a.isdigit() for a in ctx.args):
       raise commands.UsageError()
     #
+    await ctx.reply('Loading ' + ', '.join(ctx.args) + ' from TMX ...')
     async def run():
       async with self.busy:
         for arg in ctx.args:
@@ -325,6 +330,7 @@ class Tmx(Plugin):
     if not 1 <= count <= 10:
       raise commands.UsageError('1 to 10 maps.')
     #
+    await ctx.reply('Loading ' + (str(count) + ' random maps' if count > 1 else 'a random map') + ' from TMX ...')
     async def run():
       async with self.busy:
         added, tries = 0, 0

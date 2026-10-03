@@ -6,6 +6,7 @@ from core import commands, events, log, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
 from services import ui
+from services.rankings import difference, ordinal, race_time
 
 
 MAX_MESSAGE_LENGTH = 2000 # discord limit
@@ -34,6 +35,10 @@ class Discord(Plugin):
   #   channel_id = 123           channel mirrored with the server chat
   #   invite = "discord.gg/..."  shown in game next to discord names (optional)
   #   prefix = "!"               command prefix (optional)
+  #   local_records = 0          new local records up to this rank are posted (0: none)
+  #   dedimania = 30             the same for Dedimania records
+  #
+  # A command that does not answer by itself (e.g. one that only tells the game) gets a short "done".
 
   def __init__(self, controller):
     super().__init__(controller)
@@ -45,6 +50,8 @@ class Discord(Plugin):
     #
     self.invite = str(settings.get('invite', '')).strip()
     self.prefix = str(settings.get('prefix', '!')).strip() or '!'
+    self.record_ranks = {'local': int(settings.get('local_records', 0)), 'dedimania': int(settings.get('dedimania', 30))}
+    self.record_names = {'local': 'local', 'dedimania': 'Dedimania'}
 
     self.client = DiscordClient(self)
     self.client_task = None
@@ -57,7 +64,7 @@ class Discord(Plugin):
     controller.events.register(events.PLAYER_JOINED, self.player_connect)
     controller.events.register(events.PLAYER_LEFT, self.player_disconnect)
     controller.events.register(events.MAP_STARTED, self.new_challenge)
-    controller.events.register('TrackMania.Echo', self.echo)
+    controller.events.register(events.RECORD, self.record)
 
     register = controller.commands.register
     only_discord = (commands.DISCORD,)
@@ -151,25 +158,19 @@ class Discord(Plugin):
     self.send(self.player_name(player) + ' disconnected. (' + str(self.controller.players.count()) + ' online)')
   #
 
+  async def record(self, record):
+    if record.rank > self.record_ranks.get(record.kind, 0):
+      return
+    #
+    gain = ' (-' + difference(record.old_time - record.time) + ')' if record.old_time is not None else ''
+    self.send('\N{CHEQUERED FLAG} ' + self.player_name(record.player) + (' improved to' if record.old_time else ' drove')
+      + ' the **' + ordinal(record.rank) + '** ' + self.record_names.get(record.kind, record.kind) + ' record on **'
+      + clean_name(record.map['Name']) + '**: **' + race_time(record.time) + '**' + gain)
+  #
+
   async def new_challenge(self, map):
     self.send('Switching to map **' + clean_name(map['Name']) + '** by **' + clean_name(map['Author']) + '**')
   #
-
-  async def echo(self, params):
-    if len(params) != 2 or params[1] != 'xaseco::dedimania':
-      return
-    #
-    vals = params[0].split('#', 2)
-    if len(vals) < 3:
-      return
-    #
-    place, time, login = vals
-    player = await self.controller.players.get(login)
-    nickname = player.nickname if player else login
-    self.send('**' + clean_name(nickname) + '** [' + discord.utils.escape_markdown(login)
-      + '] gained Dedimania place **' + place + '** with a time of **' + time + '**')
-  #
-
 
   # ---- from discord ----
 
@@ -210,10 +211,18 @@ class Discord(Plugin):
     #
     login = await self.controller.accounts.login_for_discord(message.author.id)
     role = await self.controller.accounts.role(login) if login else roles.PLAYER
-    ctx = commands.Context(commands.DISCORD, login, message.author.display_name, role, words[1:],
-      self.reply, discord_id=message.author.id)
+    replied = []
+    async def reply(text):
+      replied.append(text)
+      await self.reply(text)
+    #
+    ctx = commands.Context(commands.DISCORD, login, message.author.display_name, role, words[1:], reply,
+      discord_id=message.author.id)
     if not await self.controller.commands.run(ctx, words[0]):
       self.send('Unknown command. Type **' + self.prefix + 'help** for a list.')
+    elif not replied:
+      # the command only told the game (or nothing): the sender should know it worked
+      self.send('\N{WHITE HEAVY CHECK MARK} ' + discord.utils.escape_markdown(self.prefix + text) + ' - done.')
     #
   #
 
