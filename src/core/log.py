@@ -32,7 +32,7 @@ class Logging:
     
     time = datetime.datetime.now()
     msg = '| ' + str(time) + ' | ' + self.level_names[level].rjust(8) + ' | ' + content + os.linesep
-    print(msg)
+    print(msg, end='', flush=True)
     
     f = open(filepath, 'a')
     f.write(msg)
