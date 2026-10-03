@@ -221,3 +221,20 @@ def test_records(make_storage):
   #
   with_storage(make_storage, scenario)
 #
+
+
+def test_karma(make_storage):
+  async def scenario(s):
+    assert await s.karma.votes('map') == {} and await s.karma.counts(['map']) == {}
+    await s.karma.vote('map', 'ann', 1)
+    await s.karma.vote('map', 'bob', -1)
+    await s.karma.vote('map', 'cid', 1)
+    await s.karma.vote('map', 'bob', 1) # changed the mind
+    await s.karma.vote('other', 'ann', -1)
+    assert await s.karma.votes('map') == {'ann': 1, 'bob': 1, 'cid': 1}
+    assert await s.karma.counts(['map', 'other', 'none']) == {'map': (3, 0), 'other': (0, 1)}
+    assert await s.karma.unvote('other', 'ann') and not await s.karma.unvote('other', 'ann')
+    assert await s.karma.counts(['other']) == {}
+  #
+  with_storage(make_storage, scenario)
+#

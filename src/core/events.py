@@ -17,6 +17,7 @@ PLAYER_FINISHED = 'PlayerFinished'     # services.race.Finish: a player crossed 
 CHECKPOINT = 'Checkpoint'              # services.race.Checkpoint: a player passed a checkpoint
 ROLE_CHANGED = 'RoleChanged'           # login whose role was changed with /setrole
 RECORD = 'Record'                      # NewRecord: a player drove a new record (local, Dedimania, ...)
+KARMA_CHANGED = 'KarmaChanged'         # uid of the map somebody voted for (services.karma)
 SECOND_PASSED = 'SecondPassed'         # None
 
 

@@ -22,6 +22,8 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
   - `tmx`: maps from TMNF-X — admins add them by id (`/add <id>`) or at random (`/rtmx [1-10]`), for one play
     (`/addthis` keeps them); maps that need TMUnlimiter or mix environments are refused. `/tmxinfo` shows what TMX
     knows about the current map, a widget its best TMX times
+  - `karma`: players rate the current map with `++` or `--` (in the chat or in a widget at the left), `/karma` shows
+    who voted how; the map list (`/list`) shows the votes of every map
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
     `/jukebox` shows the wishes); rules: one wish per player, no recently played maps (operators and above: no limits)
 

@@ -1,8 +1,8 @@
 import copy
 import datetime
 
-from storage.interfaces import (Ban, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap, Record,
-  RecordStore, Storage, StoredPlayer)
+from storage.interfaces import (Ban, KarmaStore, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap,
+  Record, RecordStore, Storage, StoredPlayer)
 
 
 # Keeps everything in memory, lost when pyseco stops. Useful for tests and as a template for new backends.
@@ -195,6 +195,37 @@ class MemoryRecordStore(RecordStore):
 #
 
 
+class MemoryKarmaStore(KarmaStore):
+
+  def __init__(self):
+    self._votes = {} # uid -> {login: value}
+  #
+
+  async def vote(self, uid, login, value):
+    self._votes.setdefault(uid, {})[login] = value
+  #
+
+  async def unvote(self, uid, login):
+    return self._votes.get(uid, {}).pop(login, None) is not None
+  #
+
+  async def votes(self, uid):
+    return dict(self._votes.get(uid, {}))
+  #
+
+  async def counts(self, uids):
+    result = {}
+    for uid in uids:
+      votes = self._votes.get(uid)
+      if votes:
+        result[uid] = (sum(1 for v in votes.values() if v > 0), sum(1 for v in votes.values() if v < 0))
+      #
+    #
+    return result
+  #
+#
+
+
 class MemoryStorage(Storage):
 
   def __init__(self):
@@ -203,6 +234,7 @@ class MemoryStorage(Storage):
     self.playlist = MemoryPlaylistStore()
     self.moderation = MemoryModerationStore()
     self.records = MemoryRecordStore(self.players)
+    self.karma = MemoryKarmaStore()
   #
 
   async def open(self):

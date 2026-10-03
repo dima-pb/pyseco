@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: admin_panel, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
+# plugins to load: admin_panel, custom_votes, dedimania, discord, flexitime, jukebox, karma, local_records, tmx, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -100,7 +100,7 @@ random = "primarytype=0"
 top = 5
 
 # Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
-# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5), admin_panel (default x = -61.3, y = -45.9),
+# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5), admin_panel (default x = -61.3, y = -45.9), karma (default x = -64, y = 22.4),
 # dedimania (default x = 48, y = 3.7, below local_records), tmx (default x = 48, y = -18.7, below dedimania)
 #[widgets.flexitime]
 #x = 49

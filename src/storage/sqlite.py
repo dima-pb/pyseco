@@ -2,8 +2,8 @@ import asyncio
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
-from storage.interfaces import (Ban, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap, Record,
-  RecordStore, Storage, StoredPlayer)
+from storage.interfaces import (Ban, KarmaStore, MapStore, ModerationStore, Play, PlayerStore, PlaylistStore, QueuedMap,
+  Record, RecordStore, Storage, StoredPlayer)
 
 
 class Database:
@@ -418,6 +418,59 @@ class SqliteRecordStore(RecordStore):
 #
 
 
+# ---- karma ----
+
+KARMA_MIGRATIONS = [
+  # 1
+  '''
+  CREATE TABLE karma (
+    uid TEXT NOT NULL,
+    login TEXT NOT NULL,
+    value INTEGER NOT NULL,
+    date TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (uid, login)
+  );
+  ''',
+]
+
+
+class SqliteKarmaStore(KarmaStore):
+
+  def __init__(self, db):
+    self.db = db
+  #
+
+  async def migrate(self):
+    await self.db.migrate('karma', KARMA_MIGRATIONS)
+  #
+
+  async def vote(self, uid, login, value):
+    await self.db.execute("INSERT OR REPLACE INTO karma (uid, login, value, date) VALUES (?, ?, ?, datetime('now'))",
+      (uid, login, value))
+  #
+
+  async def unvote(self, uid, login):
+    return (await self.db.execute('DELETE FROM karma WHERE uid = ? AND login = ?', (uid, login))).rowcount > 0
+  #
+
+  async def votes(self, uid):
+    return {r['login']: r['value'] for r in await self.db.fetchall('SELECT login, value FROM karma WHERE uid = ?', (uid,))}
+  #
+
+  async def counts(self, uids):
+    uids = list(uids)
+    result = {}
+    for start in range(0, len(uids), 500): # SQLite limits the number of parameters
+      chunk = uids[start:start + 500]
+      rows = await self.db.fetchall('SELECT uid, SUM(value > 0) AS plus, SUM(value < 0) AS minus FROM karma WHERE uid IN ('
+        + ','.join('?' * len(chunk)) + ') GROUP BY uid', chunk)
+      result.update({r['uid']: (r['plus'], r['minus']) for r in rows})
+    #
+    return result
+  #
+#
+
+
 class SqliteStorage(Storage):
   # everything in one SQLite file
 
@@ -428,11 +481,12 @@ class SqliteStorage(Storage):
     self.playlist = SqlitePlaylistStore(self.db)
     self.moderation = SqliteModerationStore(self.db)
     self.records = SqliteRecordStore(self.db)
+    self.karma = SqliteKarmaStore(self.db)
   #
 
   async def open(self):
     await self.db.open()
-    for store in (self.players, self.maps, self.playlist, self.moderation, self.records):
+    for store in (self.players, self.maps, self.playlist, self.moderation, self.records, self.karma):
       await store.migrate()
     #
   #

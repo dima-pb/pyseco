@@ -1,6 +1,7 @@
 from core import commands, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
+from services.karma import text as karma_text
 from services.playlist import Entry, PlaylistError
 from services.windows import ListWindow
 
@@ -23,7 +24,7 @@ class Jukebox(Plugin):
     self.per_player = int(settings.get('per_player', 1))
     self.playlist = controller.playlist
     # admins get a button per map: keep (temporary maps) or remove
-    self.list_window = ListWindow(controller.ui, width=100, columns=[7, 50, 30])
+    self.list_window = ListWindow(controller.ui, width=100, columns=[7, 42, 24, 14])
     self.confirm_window = ListWindow(controller.ui, width=60, page_size=2)
     self.queue_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
 
@@ -94,8 +95,9 @@ class Jukebox(Plugin):
 
   async def open_list(self, login, role, args, page):
     maps, _ = self.search(args)
-    rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(m['Name']), '$ddd' + (m.get('Author') or '?'))
-      for i, m in maps]
+    karma = await self.controller.karma.counts(m['UId'] for i, m in maps)
+    rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(m['Name']), '$ddd' + (m.get('Author') or '?'),
+      karma_text(*karma.get(m['UId'], (0, 0)))) for i, m in maps]
     uids = [m['UId'] for i, m in maps]
     async def wish(login, index):
       await self.wish_from_window(login, uids[index])

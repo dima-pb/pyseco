@@ -55,7 +55,7 @@ class Discord(Plugin):
     self.button = bool(settings.get('button', True)) and bool(self.invite)
     self.button_id = controller.ui.manialink_id()
     # below the game's ranking box at the top left
-    self.button_x, self.button_y = controller.ui.position('discord', -63.5, 27.8)
+    self.button_x, self.button_y = controller.ui.position('discord', -64, 27.8) # lined up with that box
     self.prefix = str(settings.get('prefix', '!')).strip() or '!'
     self.record_ranks = {'local': int(settings.get('local_records', 0)), 'dedimania': int(settings.get('dedimania', 30))}
     self.record_names = {'local': 'local', 'dedimania': 'Dedimania'}

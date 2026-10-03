@@ -232,14 +232,44 @@ class RecordStore(ABC):
 #
 
 
+class KarmaStore(ABC):
+  # how players rate maps: one vote (+1 or -1) per player and map
+
+  @abstractmethod
+  async def vote(self, uid, login, value):
+    # the player's vote on the map; voting again replaces it
+    ...
+  #
+
+  @abstractmethod
+  async def unvote(self, uid, login):
+    # takes the player's vote on the map back; True if there was one
+    ...
+  #
+
+  @abstractmethod
+  async def votes(self, uid):
+    # {login: value} of the map
+    ...
+  #
+
+  @abstractmethod
+  async def counts(self, uids):
+    # {uid: (plus, minus)} of the maps that have votes
+    ...
+  #
+#
+
+
 class Storage(ABC):
-  # one backend; players, maps, playlist, moderation, records are its stores
+  # one backend; players, maps, playlist, moderation, records, karma are its stores
 
   players: PlayerStore
   maps: MapStore
   playlist: PlaylistStore
   moderation: ModerationStore
   records: RecordStore
+  karma: KarmaStore
 
   @abstractmethod
   async def open(self):
