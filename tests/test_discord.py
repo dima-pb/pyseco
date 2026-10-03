@@ -133,3 +133,20 @@ def test_invite_button(tmp_path):
   #
   asyncio.run(scenario())
 #
+
+
+def test_invite_button_shows_the_logo_with_web_server(tmp_path):
+  async def scenario():
+    config = DISCORD_CONFIG + '[http]\nport = 0\nurl = "http://example.org:8080"\n'
+    async with Harness(tmp_path, config) as h:
+      h.controller.web.port = 1 # as if it were on (not started)
+      plugin = await discord_plugin(h)
+      await h.join('ann', 'Ann')
+      quads = list(h.manialink('ann', plugin.button_id).iter('quad'))
+      assert [(q.get('image'), q.get('url')) for q in quads] == [(None, 'discord.gg/test'),
+        ('http://example.org:8080/discord.png', 'discord.gg/test')] # on a background
+      await plugin.stop()
+    #
+  #
+  asyncio.run(scenario())
+#

@@ -5,7 +5,7 @@ import xmlrpc.client
 from core import commands, events, log
 from core.server import Server, parse_callback
 from plugins.plugins import Plugins
-from services import accounts, admin, chat, maps, moderation, players, playlist, race, ui
+from services import accounts, admin, chat, maps, moderation, players, playlist, race, ui, web
 import storage
 
 
@@ -26,7 +26,7 @@ class Controller:
   #   services: accounts (roles, discord links), players (who is online), maps (map list, current map,
   #             history), ui (manialinks; windows and widgets in services/windows.py), chat (messages to players),
   #             moderation (kick, mute, ban), playlist (which map comes next, requests for maps),
-  #             race (checkpoints and finishes), admin (/admin actions)
+  #             race (checkpoints and finishes), admin (/admin actions), web (serves images for manialinks)
   # Plugins use these, never each other.
 
   def __init__(self, config, logger):
@@ -41,6 +41,7 @@ class Controller:
     # services register their event handlers before the plugins, so plugins see an up to date state
     self.accounts = accounts.Accounts(self.storage.players, config.masteradmins)
     self.ui = ui.UI(self)
+    self.web = web.Web(self)
     self.players = players.Players(self)
     self.admin = admin.Admin(self)
     self.maps = maps.Maps(self)
@@ -78,6 +79,7 @@ class Controller:
       await self.server.disconnect()
       raise
     #
+    await self.web.start()
     await self.players.start()
     await self.maps.start()
     await self.moderation.start()
@@ -96,6 +98,7 @@ class Controller:
       dispatcher.cancel()
       timer.cancel()
       await self.plugins.stop()
+      await self.web.stop()
       await self.server.disconnect()
     #
   #

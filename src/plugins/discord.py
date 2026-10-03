@@ -35,7 +35,8 @@ class Discord(Plugin):
   #   token = "..."              bot token
   #   channel_id = 123           channel mirrored with the server chat
   #   invite = "discord.gg/..."  shown in game next to discord names and as a button (optional)
-  #   button = true              the button that opens the invite (the widget "discord", [widgets.discord] moves it)
+  #   button = true              the button that opens the invite (the widget "discord", [widgets.discord] moves it);
+  #                              the Discord logo with pyseco's web server ([http]), otherwise a text button
   #   prefix = "!"               command prefix (optional)
   #   local_records = 0          new local records up to this rank are posted (0: none)
   #   dedimania = 30             the same for Dedimania records
@@ -163,11 +164,17 @@ class Discord(Plugin):
   #
 
   async def show_button(self, login=None):
-    # a small button that opens the invite link
-    xml = ui.frame(ui.quad(0, 0, 0, 7, 2, *ROW_STYLE, url=self.invite)
-      + ui.label(3.5, -1, 1, '$fffDiscord', 6.4, 1.6, size=1, halign='center', valign='center'),
-      self.button_x, self.button_y, 10)
-    await self.controller.ui.show(self.button_id, xml, login)
+    # a small button that opens the invite link: the Discord logo, or text without web server
+    logo = self.controller.web.url('discord.png')
+    if logo:
+      # the logo (619 x 470 pixels) on a light button (chosen in game); a unit is about 15 pixels wide but only 11 high
+      button = ui.quad(0, 0, 0, 4.8, 4.6, 'Bgs1InRace', 'BgButton', url=self.invite) \
+        + ui.quad(0.8, -0.67, 1, 3.2, 3.26, image=logo, url=self.invite)
+    else:
+      button = ui.quad(0, 0, 0, 7, 2, *ROW_STYLE, url=self.invite) \
+        + ui.label(3.5, -1, 1, '$fffDiscord', 6.4, 1.6, size=1, halign='center', valign='center')
+    #
+    await self.controller.ui.show(self.button_id, ui.frame(button, self.button_x, self.button_y, 10), login)
   #
 
   async def player_connect(self, player):

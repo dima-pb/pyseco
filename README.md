@@ -104,6 +104,8 @@ controller.server.get_player_list(100, 0)`; errors of the server raise `xmlrpc.c
 from the dedicated server's `ListMethods.html` by `tools/gen_server_api.py` (parameter names and the returned
 structures are listed there). `controller.server.call('Method', ...)` reaches any method directly.
 Messages to players: `controller.chat.announce(text)`, `controller.chat.tell(login, text)`.
+Images for manialinks: put them into `src/www`; `controller.web.url('name.png')` gives their URL when the web
+server is on (`[http]` port and url), otherwise None.
 
 UI (`services/windows.py`), created in `__init__`:
 - `ListWindow(controller.ui, columns=[...])`, then `await window.open(login, title, rows, on_click)`: a window

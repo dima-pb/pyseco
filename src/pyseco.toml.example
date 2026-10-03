@@ -23,6 +23,12 @@ log_level = "info"
 # save the map list there. Empty: changes last until the server restarts
 matchsettings = "MatchSettings/active.txt"
 
+[http]
+# a tiny web server for images in widgets (e.g. the Discord logo): the players' games load them by URL.
+# port 0 switches it off (widgets show text instead); url: how players reach the port (http, TM can't load https)
+port = 0
+url = ""
+
 [storage]
 # sqlite: <data_dir>/pyseco.db; memory: nothing is kept when pyseco stops
 backend = "sqlite"
