@@ -5,6 +5,7 @@ import discord
 from core import commands, events, log, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
+from services import ui
 
 
 MAX_MESSAGE_LENGTH = 2000 # discord limit
@@ -202,7 +203,7 @@ class Discord(Plugin):
     #
 
     nick = message.author.display_name.replace('$', '$$')
-    link = '$l[' + self.invite + ']discord$l' if self.invite else 'discord'
+    link = ui.link(self.invite, 'discord') if self.invite else 'discord'
     await self.controller.chat.send_raw('[' + nick + '@' + link + '] $z$s' + text)
   #
 
@@ -227,7 +228,7 @@ class Discord(Plugin):
 
   def discord_user_ingame(self, ctx):
     nick = ctx.display_name.replace('$', '$$')
-    return nick + ('@$l[' + self.invite + ']discord$l' if self.invite else '@discord')
+    return nick + '@' + (ui.link(self.invite, 'discord') if self.invite else 'discord')
   #
 
   async def cmd_help(self, ctx):

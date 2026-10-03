@@ -18,6 +18,9 @@ Which plugins are loaded is set with `plugins = [...]` in `src/pyseco.toml`:
     records are sent when the map ends. Needs the server's Dedimania community code in `[dedimania]`
   - `local_records`: the best time of every player on every map, with the checkpoints of the run; a widget with
     the top 3 and the records around your own, `/records` (a click on a record shows its checkpoints)
+  - `tmx`: maps from TMNF-X — admins add them by id (`/add <id>`) or at random (`/rtmx [1-10]`), for one play
+    (`/addthis` keeps them); maps that need TMUnlimiter or mix environments are refused. `/tmxinfo` shows what TMX
+    knows about the current map, a widget its best TMX times
   - `jukebox`: players wish the next maps (`/list` opens a window, a click wishes the map; `/jukebox <number>`,
     `/jukebox` shows the wishes); rules: one wish per player, no recently played maps (operators and above: no limits)
 

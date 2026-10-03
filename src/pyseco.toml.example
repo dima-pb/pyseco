@@ -11,7 +11,7 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, dedimania, discord, flexitime, jukebox, local_records, welcome
+# plugins to load: ad, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
@@ -76,9 +76,16 @@ top = 5
 # false: only show the records, never send times (e.g. for a test server)
 send = true
 
+[tmx]
+# TMX search filter for /rtmx (as in tmnf.exchange's track search, e.g. "primarytype=0&tag=6" for LOL maps);
+# maps without TMUnlimiter and without environment mix are always required
+random = "primarytype=0"
+# TMX times in the widget (0: no widget)
+top = 5
+
 # Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
 # corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5),
-# dedimania (default x = 48, y = 3.7, below local_records)
+# dedimania (default x = 48, y = 3.7, below local_records), tmx (default x = 48, y = -18.7, below dedimania)
 #[widgets.flexitime]
 #x = 49
 #y = 32

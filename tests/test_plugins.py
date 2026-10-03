@@ -32,6 +32,7 @@ def test_flexitime_counts_down_and_skips(tmp_path):
     config = '[flexitime]\nminutes = 3\n[widgets.flexitime]\nx = -60\ny = 10.5\n'
     async with Harness(tmp_path, config, plugins=('flexitime',), timer=False) as h:
       assert h.server.called('SetTimeAttackLimit') == [(0,)] # the server's limit is switched off
+      assert h.server.called('ChallengeRestart') # nobody on the server: at once
       flexi = h.plugin('flexitime')
       assert flexi.left == 180
       await h.join('adm')
@@ -86,6 +87,21 @@ def test_flexitime_only_in_time_attack(tmp_path):
       assert h.plugin('flexitime').left is None
       await h.chat('bob', '/timeleft')
       assert 'no time limit' in h.replies_to('bob')[-1]
+    #
+  #
+  run(scenario())
+#
+
+
+def test_flexitime_does_not_restart_a_map_with_players(tmp_path):
+  async def scenario():
+    from fake_server import FakeServer
+    server = FakeServer()
+    server.players['ann'] = {'Login': 'ann', 'NickName': 'Ann', 'PlayerId': 2, 'TeamId': -1, 'SpectatorStatus': 0,
+      'LadderRanking': 0, 'Flags': 0}
+    async with Harness(tmp_path, plugins=('flexitime',), server=server, timer=False) as h:
+      assert h.server.called('SetTimeAttackLimit') == [(0,)]
+      assert not h.server.called('ChallengeRestart')
     #
   #
   run(scenario())

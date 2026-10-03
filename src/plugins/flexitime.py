@@ -49,9 +49,19 @@ class Flexitime(Plugin):
 
   async def start(self):
     server = self.controller.server
-    if (await server.get_time_attack_limit())['NextValue'] != 0:
+    limit = await server.get_time_attack_limit()
+    if limit['NextValue'] != 0:
       await server.set_time_attack_limit(0)
-      self.log('The server\'s time limit is switched off, flexitime keeps the time (from the next map on)')
+      self.log('The server\'s time limit is switched off, flexitime keeps the time')
+    #
+    if limit['CurrentValue'] != 0:
+      # the server takes the change with the next map; nobody there (e.g. right after the server started): now
+      if not self.controller.players.online:
+        self.log('Restarting the map, so the server\'s own time limit is gone right away')
+        await server.challenge_restart()
+      else:
+        self.log('The server\'s own time limit still runs on this map, from the next map on only flexitime')
+      #
     #
     if self.controller.maps.current is not None:
       await self.map_started(self.controller.maps.current)

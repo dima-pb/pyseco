@@ -20,11 +20,13 @@ class FakeServer:
     self.next = 1
     self.refuse = set() # file names CheckChallengeForCurrentServerParams refuses
     self.players = {} # login -> PlayerInfo of the players on the server
+    self.files = {} # filename -> data written with WriteFile
     self.handlers = {
       'Authenticate': self.authenticate,
       'GetPlayerList': lambda *args: [dict(p) for p in self.players.values()],
       'GetPlayerInfo': self.player_info,
       'Kick': self.kick,
+      'WriteFile': self.write_file,
       'GetChallengeList': lambda count, start: [dict(m) for m in self.maps[start:start + count]],
       'GetCurrentChallengeInfo': lambda: dict(self.maps[self.current]),
       'GetNextChallengeInfo': lambda: dict(self.maps[self.next]),
@@ -117,9 +119,16 @@ class FakeServer:
     return True
   #
 
+  def write_file(self, filename, data):
+    self.files[filename] = data.data
+    return True
+  #
+
   def add_map(self, filename):
-    self.maps.append(self.make_map(len(self.maps) + 100, 'Added') | {'FileName': filename,
-      'UId': 'uid-' + filename})
+    # a file written by WriteFile holds 'GBX:<uid>' (see fake_tmx), other new files get a made up uid
+    data = self.files.get(filename, b'').decode()
+    uid = data[4:] if data.startswith('GBX:') else 'uid-' + filename
+    self.maps.append(self.make_map(len(self.maps) + 100, 'Added') | {'FileName': filename, 'UId': uid})
     self.list_modified()
     return True
   #

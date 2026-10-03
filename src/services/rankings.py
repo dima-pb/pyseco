@@ -1,10 +1,11 @@
 from core.text import strip_colors
-from services.ui import frame, label, quad
+from services.ui import frame, label, link, quad
 from services.windows import ROW_STYLE, TITLE_STYLE, WINDOW_STYLE, ListWindow
 
 
 # Widget and windows for a ranking of times (local records, Dedimania, ...). A ranking is a list, best first,
-# of objects with login, nickname, time (ms) and checkpoints ([ms]).
+# of objects with login, nickname, time (ms) and checkpoints ([ms]); with an url (e.g. of a replay), a click on
+# the record opens it.
 
 
 def race_time(ms):
@@ -35,12 +36,14 @@ class RankingWidget:
   #   widget = RankingWidget(controller.ui, 'local_records', 'Local Records', x, y, top, on_click)
   #   await widget.show(login, nickname, ranking)
   # on_click(login) is awaited on a click. The place can be moved with [widgets.<name>].
+  # personal=False: only the top records, the same for everybody.
 
-  def __init__(self, ui, name, title, x, y, top, on_click):
+  def __init__(self, ui, name, title, x, y, top, on_click, personal=True):
     self.ui = ui
     self.title = title
     self.top = max(top, 1)
-    self.lines = self.top + 3 # the one to beat, the own, the last
+    self.personal = personal
+    self.lines = self.top + 3 if personal else self.top # the one to beat, the own, the last
     self.id = ui.manialink_id()
     self.x, self.y = ui.position(name, x, y)
     self.action = ui.actions(1, lambda login, offset: on_click(login))
@@ -50,6 +53,9 @@ class RankingWidget:
     # positions in the ranking the widget shows: the top, the one to beat and the own record, the last one
     count = len(ranking)
     ranks = list(range(min(self.top, count)))
+    if not self.personal:
+      return ranks
+    #
     if own is not None and own >= self.top:
       ranks += [rank for rank in (own - 1, own) if rank >= self.top]
     #
@@ -67,7 +73,7 @@ class RankingWidget:
       quad(0.4, -0.4, 1, WIDTH - 0.8, 2.8, *TITLE_STYLE, action=self.action),
       label(1, -1.8, 2, '$fff' + self.title, WIDTH - 2, 2, size=1, valign='center')]
     lines = [(i, ranking[i]) for i in self.shown_ranks(ranking, own)]
-    if own is None:
+    if own is None and self.personal:
       lines.append((None, None)) # the player's own line
     #
     previous = -1
@@ -78,7 +84,10 @@ class RankingWidget:
       #
       previous = i if i is not None else previous
       y = -3.6 - n * LINE
-      if record is None or record.login == login:
+      url = getattr(record, 'url', None)
+      if url:
+        parts.append(quad(0.4, y + 0.1, 1, WIDTH - 0.8, LINE, *ROW_STYLE, url=url))
+      elif record is None or record.login == login:
         parts.append(quad(0.4, y + 0.1, 1, WIDTH - 0.8, LINE, *ROW_STYLE, action=self.action))
       #
       rank = str(i + 1) + '.' if i is not None else '--.'
@@ -110,15 +119,24 @@ class RankingWindows:
     self.checkpoints_window = ListWindow(ui, width=70, page_size=20, columns=[12, 18, 18, 18])
   #
 
-  async def open(self, login, title, ranking, own, dates=True):
-    # own: the player's own best run (with checkpoints) to compare with, or None
-    rows = [('$ddd' + str(i + 1) + '.', ('$ff0' if i < 3 else '$fff') + race_time(r.time), '$fff' + r.nickname,
+  async def open(self, login, title, ranking, own, dates=True, checkpoints=True, hint=''):
+    # own: the player's own best run (with checkpoints) to compare with, or None;
+    # checkpoints=False: the records have none, a click does nothing
+    def name(r):
+      url = getattr(r, 'url', None)
+      return link(url, '$fff' + r.nickname) if url else '$fff' + r.nickname
+    #
+    rows = [('$ddd' + str(i + 1) + '.', ('$ff0' if i < 3 else '$fff') + race_time(r.time), name(r),
       '$ddd' + (r.date[:10] if dates and getattr(r, 'date', None) else '')) for i, r in enumerate(ranking)]
     ranking = list(ranking)
     async def show_checkpoints(login, index):
       await self.open_checkpoints(login, ranking[index], index, own)
     #
-    await self.window.open(login, title, rows, show_checkpoints, hint='Click a record for its checkpoints')
+    if checkpoints:
+      await self.window.open(login, title, rows, show_checkpoints, hint='Click a record for its checkpoints')
+    else:
+      await self.window.open(login, title, rows, hint=hint)
+    #
   #
 
   async def open_checkpoints(self, login, record, index, own):

@@ -14,6 +14,24 @@ def escape(text):
 #
 
 
+def game_url(url):
+  # TM puts 'http://' in front of every link itself, 'https://tmnf.exchange' would become 'http://https://...':
+  # links are given without scheme
+  for scheme in ('https://', 'http://'):
+    if url.startswith(scheme):
+      return url[len(scheme):]
+    #
+  #
+  return url
+#
+
+
+def link(url, text):
+  # text that opens url when clicked ($l)
+  return '$l[' + game_url(url) + ']' + text + '$l'
+#
+
+
 def element(name, **attributes):
   # <name a="b" .../>; attributes with value None are left out, a trailing _ is dropped (class_ -> class)
   parts = [name] + [key.rstrip('_') + '="' + escape(value) + '"' for key, value in attributes.items() if value is not None]
@@ -35,7 +53,7 @@ def label(x, y, z, text, width=None, height=None, size=2, halign=None, valign=No
 
 def quad(x, y, z, width, height, style=None, substyle=None, image=None, action=None, url=None):
   return element('quad', posn=str(x) + ' ' + str(y) + ' ' + str(z), sizen=str(width) + ' ' + str(height),
-    style=style, substyle=substyle, image=image, action=action, url=url)
+    style=style, substyle=substyle, image=image, action=action, url=game_url(url) if url else None)
 #
 
 

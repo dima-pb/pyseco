@@ -13,6 +13,7 @@ AVAILABLE = {
   'flexitime': ('plugins.flexitime', 'Flexitime'),
   'jukebox': ('plugins.jukebox', 'Jukebox'),
   'local_records': ('plugins.local_records', 'LocalRecords'),
+  'tmx': ('plugins.tmx', 'Tmx'),
   'welcome': ('plugins.welcome', 'Welcome'),
 }
 
