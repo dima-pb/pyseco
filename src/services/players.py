@@ -2,6 +2,7 @@ import xmlrpc.client
 
 from core import commands, events, roles
 from core.text import strip_colors
+from services.windows import ListWindow
 
 
 MAX_PLAYERS = 300
@@ -43,6 +44,7 @@ class Players:
   def __init__(self, controller):
     self.controller = controller
     self.online = {} # login -> Player
+    self.staff_window = ListWindow(controller.ui, width=90, columns=[18, 44, 24])
     controller.events.register('TrackMania.PlayerConnect', self.player_connect)
     controller.events.register('TrackMania.PlayerDisconnect', self.player_disconnect)
     controller.events.register('TrackMania.PlayerInfoChanged', self.player_info_changed)
@@ -126,10 +128,14 @@ class Players:
       await ctx.reply('There are no admins or operators.')
       return
     #
-    for login, nickname, role in staff:
-      name = strip_colors(nickname) if nickname else login
-      await ctx.reply(roles.NAMES[role] + ': ' + name + ' (' + login + ')')
+    if ctx.source == commands.GAME:
+      rows = [('$ddd' + roles.NAMES[role], '$fff' + (nickname or login), '$ddd' + login
+        + ('  $6f6online' if login in self.online else '')) for login, nickname, role in staff]
+      await self.staff_window.open(ctx.login, 'Staff', rows)
+      return
     #
+    await ctx.reply('\n'.join(roles.NAMES[role] + ': ' + (strip_colors(nickname) if nickname else login) + ' (' + login
+      + ')' for login, nickname, role in staff))
   #
 
   async def cmd_setrole(self, ctx):

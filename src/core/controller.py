@@ -40,8 +40,8 @@ class Controller:
 
     # services register their event handlers before the plugins, so plugins see an up to date state
     self.accounts = accounts.Accounts(self.storage.players, config.masteradmins)
-    self.players = players.Players(self)
     self.ui = ui.UI(self)
+    self.players = players.Players(self)
     self.admin = admin.Admin(self)
     self.maps = maps.Maps(self)
     self.chat = chat.Chat(self)

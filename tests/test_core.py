@@ -135,7 +135,8 @@ def test_chat_commands_and_permissions(tmp_path):
       await h.chat('master', '/setrole bob king')
       assert 'Usage: /setrole <login> <player|operator|admin>' in h.replies_to('master')[-1]
       await h.chat('bob', '/staff')
-      assert any('masteradmin: master' in r for r in h.replies_to('bob'))
+      assert texts(h.manialink('bob'))[:4] == ['$fffStaff', '$dddmasteradmin', '$fffmaster', '$dddmaster']
+      assert '$dddoperator' in texts(h.manialink('bob'))
       count = len(h.server.called('ChatSendServerMessageToLogin'))
       await h.chat('bob', '/unknowncommand') # may belong to XAseco
       await h.chat('bob', 'hello /setrole')  # not a command

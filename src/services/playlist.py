@@ -1,7 +1,11 @@
 import xmlrpc.client
 
-from core import events, log, roles
+from core import commands, events, log, roles
 from core.text import strip_colors
+from services.windows import ListWindow
+
+
+HISTORY = 30 # maps /history shows
 
 
 class PlaylistError(Exception):
@@ -48,6 +52,8 @@ class Playlist:
     self.queue = [] # [Entry], stored as QueuedMap (same fields)
     self.temporary = {} # uid -> filename of maps to remove after they were played
     self.playing_temporary = None # uid of the temporary map being played
+    self.next_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
+    self.history_window = ListWindow(controller.ui, width=90, columns=[7, 56, 23])
 
     controller.events.register(events.MAP_STARTED, self.map_started)
     controller.events.register(events.MAP_LIST_CHANGED, self.list_changed)
@@ -204,24 +210,39 @@ class Playlist:
 
   # ---- commands ----
 
-  async def cmd_nextmap(self, ctx):
+  async def coming(self):
+    # [(name, why)] of the next maps: the requests, or the server's next map from its list
     if self.queue:
-      e = self.queue[0]
-      await ctx.reply('Next map: $fff' + strip_colors(e.name) + '$z$s (requested by ' + e.requested_by() + ')')
-      return
+      return [(e.name, 'requested by ' + e.requested_by()) for e in self.queue]
     #
     m = await self.controller.server.get_next_challenge_info()
-    await ctx.reply('Next map: $fff' + strip_colors(m['Name']) + '$z$s')
+    return [(m['Name'], 'from the map list')]
+  #
+
+  async def cmd_nextmap(self, ctx):
+    coming = await self.coming()
+    if ctx.source == commands.GAME:
+      rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(name), '$ddd' + why) for i, (name, why) in enumerate(coming)]
+      await self.next_window.open(ctx.login, 'Next maps', rows)
+    else:
+      name, why = coming[0]
+      await ctx.reply('Next map: ' + strip_colors(name) + ' (' + why + ')')
+    #
   #
 
   async def cmd_history(self, ctx):
-    history = await self.controller.maps.history(11)
-    if len(history) < 2:
+    history = (await self.controller.maps.history(HISTORY + 1))[1:] # without the current map
+    if not history:
       await ctx.reply('No maps were played yet.')
       return
     #
-    for i, (uid, name, played_at) in enumerate(history[1:]):
-      await ctx.reply(str(i + 1) + '. $fff' + strip_colors(name) + '$z$s (' + played_at + ')')
+    if ctx.source == commands.GAME:
+      rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(name), '$ddd' + played_at[:16])
+        for i, (uid, name, played_at) in enumerate(history)]
+      await self.history_window.open(ctx.login, 'Played before', rows, hint='Times in UTC')
+    else:
+      await ctx.reply('\n'.join(str(i + 1) + '. ' + strip_colors(name) + ' (' + played_at[:16] + ')'
+        for i, (uid, name, played_at) in enumerate(history[:10])))
     #
   #
 

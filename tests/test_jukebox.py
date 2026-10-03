@@ -182,17 +182,20 @@ def test_nextmap_and_history(tmp_path):
   async def scenario():
     async with Harness(tmp_path, plugins=PLUGINS) as h:
       await h.chat('bob', '/nextmap')
-      assert h.replies_to('bob')[-1].endswith('Next map: $fffMap 2$z$s')
+      assert texts(h.manialink('bob'))[1:4] == ['$ddd1.', '$fffMap 2', '$dddfrom the map list']
       await h.chat('bob', '/jb 4')
+      await h.chat('carl', '/jb 5')
       await h.chat('bob', '/nextmap')
-      assert 'Map 4' in h.replies_to('bob')[-1]
+      assert texts(h.manialink('bob'))[1:] == ['$ddd1.', '$fffMap 4', '$dddrequested by bob', '$ddd2.', '$fffMap 5',
+        '$dddrequested by carl']
       await h.chat('bob', '/history')
       assert 'No maps were played yet' in h.replies_to('bob')[-1]
       await h.server.play_next()
       await h.server.play_next()
       await h.settle()
       await h.chat('bob', '/history')
-      assert '1. $fffMap 4$z$s' in h.replies_to('bob')[-1]
+      shown = texts(h.manialink('bob'))
+      assert shown[0] == '$fffPlayed before' and shown[1:3] == ['$ddd1.', '$fffMap 4'] and shown[-1] == '$bbbTimes in UTC'
     #
   #
   run(scenario())
@@ -209,7 +212,7 @@ def test_jukebox_with_the_memory_backend(tmp_path):
       await h.server.play_next() # map 4
       await h.settle()
       await h.chat('bob', '/history')
-      assert '1. $fffMap 3$z$s' in h.replies_to('bob')[-1]
+      assert texts(h.manialink('bob'))[1:3] == ['$ddd1.', '$fffMap 3']
       assert not (tmp_path / 'data' / 'pyseco.db').exists()
     #
   #
@@ -226,7 +229,7 @@ def test_replay_vote_works_without_the_jukebox(tmp_path):
       assert await queue_uids(h) == ['uid1']
       assert next_file(h) == h.server.maps[0]['FileName']
       await h.chat('bob', '/nextmap')
-      assert h.replies_to('bob')[-1].endswith('Next map: $fffMap 1$z$s (requested by Replay)')
+      assert texts(h.manialink('bob'))[1:4] == ['$ddd1.', '$fffMap 1', '$dddrequested by Replay']
     #
   #
   run(scenario())
