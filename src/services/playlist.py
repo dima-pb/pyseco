@@ -66,6 +66,8 @@ class Playlist:
     admin.register('next', self.cmd_next, role=roles.OPERATOR, help='goes to the next map now')
     admin.register('restart', self.cmd_restart, role=roles.OPERATOR, help='restarts the current map now')
     admin.register('replay', self.cmd_replay, role=roles.OPERATOR, help='plays the current map again after this one')
+    admin.register('keep', self.cmd_keep, role=roles.ADMIN, usage='[<number in /list>]',
+      help='keeps a temporary (TMX) map, the current one or that one, in the map list')
   #
 
   async def start(self):
@@ -266,20 +268,40 @@ class Playlist:
     await self.controller.chat.announce(self.controller.admin.who(ctx) + ' wants this map once more, it comes next.')
   #
 
-  async def cmd_addthis(self, ctx):
-    current = self.controller.maps.current
-    if current is None or current['UId'] not in self.temporary:
-      await ctx.reply('The current map is not a temporary map.')
+  async def keep(self, uid):
+    # a temporary map stays in the map list; True if that was saved in the match settings
+    del self.temporary[uid]
+    if self.playing_temporary == uid:
+      self.playing_temporary = None
+    #
+    await self.store.remove_temporary(uid)
+    return await self.controller.maps.save()
+  #
+
+  async def keep_map(self, ctx, m):
+    if m is None or m['UId'] not in self.temporary:
+      await ctx.reply('That is not a temporary map.')
       return
     #
-    del self.temporary[current['UId']]
-    self.playing_temporary = None
-    await self.store.remove_temporary(current['UId'])
-    if await self.controller.maps.save():
-      await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server (saved in the match settings).')
-    else:
-      await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server until it restarts '
-        '([maps] matchsettings is not set).')
+    saved = await self.keep(m['UId'])
+    self.log(str(ctx.login) + ' kept ' + m['FileName'])
+    await ctx.reply('$fff' + strip_colors(m['Name']) + '$z$s stays on the server' + (' (saved in the match settings).'
+      if saved else ' until it restarts ([maps] matchsettings is not set).'))
+  #
+
+  async def cmd_addthis(self, ctx):
+    await self.keep_map(ctx, self.controller.maps.current)
+  #
+
+  async def cmd_keep(self, ctx):
+    maps = self.controller.maps.list
+    if len(ctx.args) > 1 or (ctx.args and not ctx.args[0].isdigit()):
+      raise commands.UsageError()
     #
+    if ctx.args and not 1 <= int(ctx.args[0]) <= len(maps):
+      await ctx.reply('There is no map ' + ctx.args[0] + ', see /list.')
+      return
+    #
+    await self.keep_map(ctx, maps[int(ctx.args[0]) - 1] if ctx.args else self.controller.maps.current)
   #
 #

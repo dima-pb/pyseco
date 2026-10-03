@@ -22,7 +22,9 @@ class Jukebox(Plugin):
     self.recent = int(settings.get('recent', 10))
     self.per_player = int(settings.get('per_player', 1))
     self.playlist = controller.playlist
-    self.list_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
+    # admins get a button per map: keep (temporary maps) or remove
+    self.list_window = ListWindow(controller.ui, width=100, columns=[7, 50, 30])
+    self.confirm_window = ListWindow(controller.ui, width=60, page_size=2)
     self.queue_window = ListWindow(controller.ui, width=90, columns=[7, 50, 29])
 
     register = controller.commands.register
@@ -79,30 +81,72 @@ class Jukebox(Plugin):
     return str(index + 1) + '. $fff' + strip_colors(m['Name']) + '$z$s by ' + (m.get('Author') or '?')
   #
 
-  async def cmd_list(self, ctx):
+  def search(self, args):
+    # [(number - 1, map)] for /list [page | search text], and the page
     maps = list(enumerate(self.controller.maps.list))
-    page = 1
-    if len(ctx.args) == 1 and ctx.args[0].isdigit():
-      page = int(ctx.args[0])
-    elif ctx.args:
-      words = [w.lower() for w in ctx.args]
-      maps = [(i, m) for i, m in maps if all(w in (strip_colors(m['Name']) + ' ' + m.get('Author', '')).lower()
-        for w in words)]
-      if not maps:
-        await ctx.reply('No map matches "' + ' '.join(ctx.args) + '".')
-        return
+    if len(args) == 1 and args[0].isdigit():
+      return maps, int(args[0])
+    #
+    words = [w.lower() for w in args]
+    return [(i, m) for i, m in maps if all(w in (strip_colors(m['Name']) + ' ' + m.get('Author', '')).lower()
+      for w in words)], 1
+  #
+
+  async def open_list(self, login, role, args, page):
+    maps, _ = self.search(args)
+    rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(m['Name']), '$ddd' + (m.get('Author') or '?'))
+      for i, m in maps]
+    uids = [m['UId'] for i, m in maps]
+    async def wish(login, index):
+      await self.wish_from_window(login, uids[index])
+    #
+    buttons = None
+    if role >= roles.ADMIN:
+      temporary = self.playlist.temporary
+      texts = ['Keep' if m['UId'] in temporary else 'Remove' for i, m in maps]
+      async def button(login, index):
+        await self.list_button(login, uids[index], args, index // self.list_window.page_size)
       #
+      buttons = (texts, button)
+    #
+    searched = args and not (len(args) == 1 and args[0].isdigit())
+    title = 'Maps' + (' matching "' + ' '.join(args) + '"' if searched else '')
+    await self.list_window.open(login, title, rows, wish, page, hint='Click a map to wish it', buttons=buttons)
+  #
+
+  async def list_button(self, login, uid, args, page):
+    # keep (temporary maps) at once, remove after asking; then the list again, on the same page
+    maps = self.controller.maps
+    m = maps.by_uid.get(uid)
+    if m is None:
+      await self.controller.chat.tell(login, 'This map is no longer on the server.')
+      return
+    #
+    admin = self.controller.admin
+    number = [str(maps.list.index(m) + 1)]
+    if uid in self.playlist.temporary:
+      await admin.run(await admin.context(login, number), 'keep')
+      await self.open_list(login, await self.controller.accounts.role(login), args, page)
+      return
+    #
+    async def answer(login, index):
+      if index == 0 and maps.by_uid.get(uid) is m:
+        await admin.run(await admin.context(login, [str(maps.list.index(m) + 1)]), 'remove')
+      #
+      await self.open_list(login, await self.controller.accounts.role(login), args, page)
+    #
+    await self.confirm_window.open(login, 'Remove ' + strip_colors(m['Name']) + '?',
+      ['$fffYes, remove it from the map list', '$fffNo'], answer, hint='The file stays on the server')
+  #
+
+  async def cmd_list(self, ctx):
+    maps, page = self.search(ctx.args)
+    if not maps:
+      await ctx.reply('No map matches "' + ' '.join(ctx.args) + '".')
+      return
     #
     if ctx.source == commands.GAME:
-      rows = [('$ddd' + str(i + 1) + '.', '$fff' + strip_colors(m['Name']), '$ddd' + (m.get('Author') or '?'))
-        for i, m in maps]
-      uids = [m['UId'] for i, m in maps]
-      async def wish(login, index):
-        await self.wish_from_window(login, uids[index])
-      #
-      searched = ctx.args and not (len(ctx.args) == 1 and ctx.args[0].isdigit())
-      title = 'Maps' + (' matching "' + ' '.join(ctx.args) + '"' if searched else '')
-      await self.list_window.open(ctx.login, title, rows, wish, page - 1, hint='Click a map to wish it')
+      await self.open_list(ctx.login, ctx.role, ctx.args, page - 1)
       return
     #
     pages = max(1, (len(maps) + LIST_PAGE - 1) // LIST_PAGE)

@@ -1,4 +1,4 @@
-from core import commands, events, roles
+from core import events, roles
 from core.text import strip_colors
 from plugins.plugin import Plugin
 from services.ui import frame, label, quad
@@ -75,16 +75,10 @@ class AdminPanel(Plugin):
     #
   #
 
-  async def context(self, login):
-    player = self.controller.players.online.get(login)
-    return commands.Context(commands.GAME, login, player.nickname if player else login,
-      await self.controller.accounts.role(login), [], lambda text: self.controller.chat.tell(login, text))
-  #
-
   async def clicked(self, login, offset):
     action = BUTTONS[offset][0]
     if action not in CONFIRM:
-      await self.controller.admin.run(await self.context(login), action)
+      await self.controller.admin.run(await self.controller.admin.context(login), action)
       return
     #
     current = self.controller.maps.current
@@ -94,7 +88,7 @@ class AdminPanel(Plugin):
     async def answer(login, index):
       await self.confirm_window.close(login)
       if index == 0 and self.controller.maps.current is current: # still the same map
-        await self.controller.admin.run(await self.context(login), action)
+        await self.controller.admin.run(await self.controller.admin.context(login), action)
       #
     #
     question, yes = CONFIRM[action]

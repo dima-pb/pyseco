@@ -62,7 +62,8 @@ type `/link` in game, then `!link <code>` in the discord channel. `!help` lists 
 ## Admin actions
 `/admin <action>` (`!admin` on discord) does things directly, while `/skip` and `/replay` stay votes for everybody:
 `next`, `replay` (the current map once more, next), `restart` (operators); `remove [<number>]` (takes the current map
-or that one off the map list, the file stays) and `save` (admins). `/admin` lists them. Changes of the map list are
+or that one off the map list, the file stays), `keep [<number>]` (a temporary TMX map stays) and `save` (admins). In
+the `/list` window admins have a button per map for keep or remove. `/admin` lists them. Changes of the map list are
 saved in the match settings file set with `matchsettings` in `[maps]`; `/addthis` saves too. The plugin
 `admin_panel` puts buttons for these actions at the bottom left for operators and admins.
 

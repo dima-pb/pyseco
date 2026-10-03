@@ -246,3 +246,44 @@ def test_jukebox_queue_window(tmp_path):
   #
   run(scenario())
 #
+
+
+def test_list_buttons_for_admins_keep_and_remove(tmp_path):
+  async def scenario():
+    config = '[maps]\nmatchsettings = "MatchSettings/active.txt"\n'
+    async with Harness(tmp_path, config, plugins=PLUGINS) as h:
+      from services.playlist import Entry
+      tmx = Entry('uid-Challenges\\TMX\\7.Challenge.Gbx', 'Challenges\\TMX\\7.Challenge.Gbx', 'TMX 7', source='TMX')
+      await h.controller.playlist.request(tmx, temporary=True) # map 6 in the list, temporary
+
+      await h.chat('bob', '/list')
+      assert 'Keep' not in ''.join(texts(h.manialink('bob'))) # players get no buttons
+
+      await h.chat('master', '/list')
+      page = h.manialink('master')
+      shown = texts(page)
+      assert shown.count('$fffRemove') == 5 and shown.count('$fffKeep') == 1
+
+      await h.click('master', action_of(page, '$fffKeep')) # keep the temporary map
+      assert tmx.uid not in h.controller.playlist.temporary
+      assert h.server.called('SaveMatchSettings') == [('MatchSettings/active.txt',)]
+      assert 'stays on the server (saved in the match settings)' in h.replies_to('master')[-1]
+      page = h.manialink('master') # the list again
+      assert '$fffKeep' not in texts(page) and texts(page).count('$fffRemove') == 6
+
+      list_window = h.plugin('jukebox').list_window
+      await h.click('master', list_window.first_action + list_window.first_button + 2) # remove map 3: asks
+      assert texts(h.manialink('master'))[0] == '$fffRemove Map 3?'
+      await h.click('master', action_of(h.manialink('master'), '$fffNo'))
+      assert not h.server.called('RemoveChallenge') and '$fffMaps' in texts(h.manialink('master'))
+      await h.click('master', list_window.first_action + list_window.first_button + 2)
+      await h.click('master', action_of(h.manialink('master'), '$fffYes, remove it from the map list'))
+      assert h.server.called('RemoveChallenge') == [('Challenges\\Map3.Challenge.Gbx',)]
+      assert '$fffMap 3' not in texts(h.manialink('master'))
+
+      await h.chat('master', '/admin keep 2')
+      assert 'That is not a temporary map.' in h.replies_to('master')[-1]
+    #
+  #
+  run(scenario())
+#

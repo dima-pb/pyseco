@@ -40,6 +40,13 @@ class Admin:
     return [a for name, a in sorted(self.actions.items()) if role >= a.role]
   #
 
+  async def context(self, login, args=()):
+    # the commands.Context of a player in game who clicked something, e.g. to run an action for a button
+    player = self.controller.players.online.get(login)
+    return commands.Context(commands.GAME, login, player.nickname if player else login,
+      await self.controller.accounts.role(login), list(args), lambda text: self.controller.chat.tell(login, text))
+  #
+
   @staticmethod
   def who(ctx):
     # the name to tell everybody who did it

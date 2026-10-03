@@ -8,6 +8,8 @@ WINDOW_LAYERS = 1 # the background drawn this many times on top of each other: l
 TITLE_STYLE = ('Bgs1InRace', 'BgTitle3_1')
 ROW_STYLE = ('BgsPlayerCard', 'BgCardSystem') # every row; one of the few styles that light up under the mouse when clickable
 ICONS = 'Icons64x64_1'
+BUTTON_STYLE = ('Bgs1InRace', 'BgTitle3_1') # small buttons in rows
+BUTTON_WIDTH = 8
 HINT_COLOR = '$bbb'
 
 ROW_HEIGHT = 3.4
@@ -26,19 +28,22 @@ class ListWindow:
   #     rows: [str] or [(column, column, ...)]
   #
   # on_click(login, index) is awaited when the player clicks a row (index in rows); without it the
-  # rows are not clickable. columns: widths of the columns, they must add up to at most width - 4.
+  # rows are not clickable. columns: widths of the columns, they must add up to at most width - 4
+  # (- BUTTON_WIDTH with buttons). buttons=(texts, handler): a small button at the end of the rows that have a
+  # text (texts[index], None: no button), a click awaits handler(login, index).
 
   def __init__(self, ui, width=80, page_size=15, columns=None):
     self.ui = ui
     self.width = width
     self.page_size = page_size
     self.columns = columns or [width - 4]
-    # actions: one per row on a page, then close, previous and next page
-    self.first_action = ui.actions(page_size + 3, self.clicked)
+    # actions: one per row on a page, then close, previous and next page, then one per row button
+    self.first_action = ui.actions(2 * page_size + 3, self.clicked)
     self.close_action = page_size
     self.prev_action = page_size + 1
     self.next_action = page_size + 2
-    self.open_for = {} # login -> {'title', 'rows', 'page', 'on_click', 'hint'}
+    self.first_button = page_size + 3
+    self.open_for = {} # login -> {'title', 'rows', 'page', 'on_click', 'hint', 'buttons'}
     ui.controller.events.register(events.PLAYER_LEFT, self.player_left)
   #
 
@@ -46,11 +51,12 @@ class ListWindow:
     return max(1, (len(rows) + self.page_size - 1) // self.page_size)
   #
 
-  async def open(self, login, title, rows, on_click=None, page=0, hint=''):
+  async def open(self, login, title, rows, on_click=None, page=0, hint='', buttons=None):
     rows = [row if isinstance(row, (tuple, list)) else (row,) for row in rows]
     page = min(max(page, 0), self.pages(rows) - 1)
     self.ui.window_opened(login, self)
-    self.open_for[login] = {'title': title, 'rows': rows, 'page': page, 'on_click': on_click, 'hint': hint}
+    self.open_for[login] = {'title': title, 'rows': rows, 'page': page, 'on_click': on_click, 'hint': hint,
+      'buttons': buttons}
     await self.ui.show(self.ui.window_id, self.render(self.open_for[login]), login)
   #
 
@@ -96,6 +102,15 @@ class ListWindow:
           valign='center'))
         x += column
       #
+      texts = state['buttons'][0] if state['buttons'] else []
+      index = page * self.page_size + i
+      if index < len(texts) and texts[index]:
+        x = width - BUTTON_WIDTH - 2
+        parts.append(quad(x, top - 0.4, 3, BUTTON_WIDTH, ROW_HEIGHT - 1, *BUTTON_STYLE,
+          action=action(self.first_button + i)))
+        parts.append(label(x + BUTTON_WIDTH / 2, top - ROW_HEIGHT / 2 + 0.1, 4, '$fff' + texts[index], BUTTON_WIDTH - 0.6,
+          ROW_HEIGHT - 1.2, size=1, halign='center', valign='center'))
+      #
     #
     if not rows:
       parts.append(label(2.5, -TOP - ROW_HEIGHT / 2, 2, '$999(empty)', width - 5, ROW_HEIGHT - 0.4, valign='center'))
@@ -130,7 +145,14 @@ class ListWindow:
       await self.close(login)
     elif offset in (self.prev_action, self.next_action):
       state['page'] += -1 if offset == self.prev_action else 1
-      await self.open(login, state['title'], state['rows'], state['on_click'], state['page'], state['hint'])
+      await self.open(login, state['title'], state['rows'], state['on_click'], state['page'], state['hint'],
+        state['buttons'])
+    elif offset >= self.first_button:
+      index = state['page'] * self.page_size + offset - self.first_button
+      texts, handler = state['buttons'] or ([], None)
+      if index < len(texts) and texts[index]:
+        await handler(login, index)
+      #
     elif state['on_click'] is not None:
       index = state['page'] * self.page_size + offset
       if index < len(state['rows']):
