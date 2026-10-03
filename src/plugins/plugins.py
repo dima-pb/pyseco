@@ -6,6 +6,7 @@ from core import log
 
 # plugin name (as used in pyseco.toml) -> module, class
 AVAILABLE = {
+  'admin_panel': ('plugins.admin_panel', 'AdminPanel'),
   'ad': ('plugins.ad', 'Ad'),
   'custom_votes': ('plugins.custom_votes', 'CustomVote'),
   'dedimania': ('plugins.dedimania', 'Dedimania'),

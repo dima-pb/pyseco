@@ -58,6 +58,13 @@ with `/setrole <login> <player|operator|admin>`. `/pyseco` lists the commands yo
 Discord commands (`!name`) use the role of the TM login the discord account is linked to:
 type `/link` in game, then `!link <code>` in the discord channel. `!help` lists them.
 
+## Admin actions
+`/admin <action>` (`!admin` on discord) does things directly, while `/skip` and `/replay` stay votes for everybody:
+`next`, `replay` (the current map once more, next), `restart` (operators); `remove [<number>]` (takes the current map
+or that one off the map list, the file stays) and `save` (admins). `/admin` lists them. Changes of the map list are
+saved in the match settings file set with `matchsettings` in `[maps]`; `/addthis` saves too. The plugin
+`admin_panel` puts buttons for these actions at the bottom left for operators and admins.
+
 ## Moderation
 Always there: `/players` (window; for operators and above a click on a player offers kick, mute, ban), `/kick`,
 `/mute`, `/unmute` (operators), `/ban <player> [30m|2h|7d] [reason]`, `/unban`, `/bans` (admins). A player is

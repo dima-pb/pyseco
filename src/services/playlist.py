@@ -56,6 +56,10 @@ class Playlist:
     register('nextmap', self.cmd_nextmap, help='shows the next map')
     register('history', self.cmd_history, help='shows the recently played maps')
     register('addthis', self.cmd_addthis, role=roles.ADMIN, help='keeps the current temporary (TMX) map on the server')
+    admin = controller.admin
+    admin.register('next', self.cmd_next, role=roles.OPERATOR, help='goes to the next map now')
+    admin.register('restart', self.cmd_restart, role=roles.OPERATOR, help='restarts the current map now')
+    admin.register('replay', self.cmd_replay, role=roles.OPERATOR, help='plays the current map again after this one')
   #
 
   async def start(self):
@@ -176,8 +180,25 @@ class Playlist:
   #
 
   async def list_changed(self, _):
-    # maps were added or removed, the next index may have moved
-    await self.apply_next()
+    # maps were added or removed: requests for removed ones go, and the next index may have moved
+    by_uid = self.controller.maps.by_uid
+    gone = [uid for uid in self.temporary if uid not in by_uid]
+    for uid in gone:
+      del self.temporary[uid]
+      await self.store.remove_temporary(uid)
+    #
+    if any(e.uid not in by_uid for e in self.queue):
+      self.queue = [e for e in self.queue if e.uid in by_uid]
+      await self.changed() # applies the next one
+    else:
+      await self.apply_next()
+    #
+  #
+
+  async def replay(self, login='', nickname=''):
+    # the current map once more, right after this one
+    current = await self.controller.server.get_current_challenge_info()
+    await self.request(Entry.from_map(current, login, nickname, source='Replay'), front=True)
   #
 
 
@@ -204,6 +225,26 @@ class Playlist:
     #
   #
 
+  async def cmd_next(self, ctx):
+    await self.controller.chat.announce(self.controller.admin.who(ctx) + ' skipped to the next map.')
+    await self.controller.server.next_challenge()
+  #
+
+  async def cmd_restart(self, ctx):
+    await self.controller.chat.announce(self.controller.admin.who(ctx) + ' restarts the map.')
+    await self.controller.server.challenge_restart()
+  #
+
+  async def cmd_replay(self, ctx):
+    try:
+      await self.replay(ctx.login or '', ctx.display_name)
+    except PlaylistError as exc:
+      await ctx.reply(str(exc))
+      return
+    #
+    await self.controller.chat.announce(self.controller.admin.who(ctx) + ' wants this map once more, it comes next.')
+  #
+
   async def cmd_addthis(self, ctx):
     current = self.controller.maps.current
     if current is None or current['UId'] not in self.temporary:
@@ -213,7 +254,11 @@ class Playlist:
     del self.temporary[current['UId']]
     self.playing_temporary = None
     await self.store.remove_temporary(current['UId'])
-    await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server. '
-      'To keep it after a server restart, save the match settings.')
+    if await self.controller.maps.save():
+      await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server (saved in the match settings).')
+    else:
+      await ctx.reply('$fff' + strip_colors(current['Name']) + '$z$s stays on the server until it restarts '
+        '([maps] matchsettings is not set).')
+    #
   #
 #

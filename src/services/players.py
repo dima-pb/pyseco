@@ -144,5 +144,6 @@ class Players:
       return
     #
     await ctx.reply(login + ' is now ' + roles.NAMES[role] + '.')
+    await self.controller.events.emit(events.ROLE_CHANGED, login)
   #
 #

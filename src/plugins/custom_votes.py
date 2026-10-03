@@ -3,7 +3,7 @@ import xmlrpc.client
 from core import commands, log
 from core.server import request_xml
 from plugins.plugin import Plugin
-from services.playlist import Entry, PlaylistError
+from services.playlist import PlaylistError
 
 
 class CustomVote(Plugin):
@@ -75,9 +75,8 @@ class CustomVote(Plugin):
 
   async def replay_map(self):
     # first in the playlist, which decides the next map
-    map = await self.controller.server.get_current_challenge_info()
     try:
-      await self.controller.playlist.request(Entry.from_map(map, source='Replay'), front=True)
+      await self.controller.playlist.replay()
     except PlaylistError as exc:
       self.controller.logger.message('Replay: ' + str(exc), log.LOG_WARNING)
     #

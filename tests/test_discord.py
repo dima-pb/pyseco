@@ -51,7 +51,7 @@ def test_discord_commands_use_linked_roles(tmp_path):
     async with Harness(tmp_path, DISCORD_CONFIG) as h:
       plugin = await discord_plugin(h)
       assert 'Not linked' in await say(plugin, 42, '!whoami')
-      assert 'You need to be admin' in await say(plugin, 42, '!skip')
+      assert 'You need to be operator' in await say(plugin, 42, '!admin next')
       assert 'Unknown or expired code' in await say(plugin, 42, '!link 123')
       assert 'Usage: !link <code>' in await say(plugin, 42, '!link')
 
@@ -60,8 +60,9 @@ def test_discord_commands_use_linked_roles(tmp_path):
       code = h.replies_to('master')[-1].split('!link ')[1].split('$')[0]
       assert 'Linked to master (masteradmin)' in await say(plugin, 42, '!link ' + code)
       assert 'Linked to master' in await say(plugin, 42, '!whoami')
-      await say(plugin, 42, '!skip')
+      await say(plugin, 42, '!admin next')
       assert h.server.called('NextChallenge')
+      assert '$fffUser42$z$s (discord) skipped to the next map.' in h.announcements()[-1]
 
       # commands for the game only are unknown on discord, discord only commands too in game
       assert 'Unknown command' in await say(plugin, 42, '!pyseco')
@@ -69,7 +70,7 @@ def test_discord_commands_use_linked_roles(tmp_path):
       assert '!setrole' in help_text and '!players' in help_text and '/link' not in help_text.split('\n')[0]
 
       assert 'Link removed' in await say(plugin, 42, '!unlink')
-      assert 'You need to be admin' in await say(plugin, 42, '!skip')
+      assert 'You need to be operator' in await say(plugin, 42, '!admin next')
       await plugin.stop()
     #
   #

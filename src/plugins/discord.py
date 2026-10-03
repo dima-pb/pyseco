@@ -63,10 +63,6 @@ class Discord(Plugin):
     only_discord = (commands.DISCORD,)
     register('help', self.cmd_help, help='lists the commands you can use', sources=only_discord)
     register('players', self.cmd_players, help='lists the players on the server', sources=only_discord)
-    register('skip', self.cmd_skip, role=roles.ADMIN, help='skips to the next map', sources=only_discord,
-      aliases=('next',))
-    register('restart', self.cmd_restart, role=roles.ADMIN, help='restarts the current map', sources=only_discord,
-      aliases=('res',))
     register('link', self.cmd_link, help='links your discord account to your TM login (get the code with /link in game)',
       usage='<code>', sources=only_discord)
     register('link', self.cmd_link_code, help='links your discord account (shows a code for !link)',
@@ -226,11 +222,6 @@ class Discord(Plugin):
     self.send(strip_colors(text))
   #
 
-  def discord_user_ingame(self, ctx):
-    nick = ctx.display_name.replace('$', '$$')
-    return nick + '@' + (ui.link(self.invite, 'discord') if self.invite else 'discord')
-  #
-
   async def cmd_help(self, ctx):
     lines = [self.prefix + c.name + (' ' + c.usage if c.usage else '') + ' - ' + c.help
       for c in self.controller.commands.available(ctx.role, commands.DISCORD)]
@@ -242,16 +233,6 @@ class Discord(Plugin):
     lines = [str(len(players)) + ' playing.']
     lines += [clean_name(p['NickName']) + ' [' + discord.utils.escape_markdown(p['Login']) + ']' for p in players]
     await ctx.reply('\n'.join(lines))
-  #
-
-  async def cmd_skip(self, ctx):
-    await self.controller.chat.send_raw(self.discord_user_ingame(ctx) + ' skipped the map.')
-    await self.controller.server.next_challenge()
-  #
-
-  async def cmd_restart(self, ctx):
-    await self.controller.chat.send_raw(self.discord_user_ingame(ctx) + ' restarted the map.')
-    await self.controller.server.challenge_restart()
   #
 
   async def cmd_link(self, ctx):

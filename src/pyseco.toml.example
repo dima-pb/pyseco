@@ -11,12 +11,17 @@ password = "SuperAdmin"
 [controller]
 # TM logins with all rights; other roles are given in game with /setrole
 masteradmins = []
-# plugins to load: ad, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
+# plugins to load: ad, admin_panel, custom_votes, dedimania, discord, flexitime, jukebox, local_records, tmx, welcome
 plugins = []
 # database, logs and caches
 data_dir = "data"
 # all, verbose, debug, info, warning, error, fatal
 log_level = "info"
+
+[maps]
+# the server's match settings file (relative to its Tracks directory): /admin remove, /admin save and /addthis
+# save the map list there. Empty: changes last until the server restarts
+matchsettings = "MatchSettings/active.txt"
 
 [storage]
 # sqlite: <data_dir>/pyseco.db; memory: nothing is kept when pyseco stops
@@ -84,7 +89,7 @@ random = "primarytype=0"
 top = 5
 
 # Widgets can be moved: [widgets.<name>] with x (-64 left .. 64 right) and y (48 top .. -48 bottom) of the top left
-# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5),
+# corner. Names: flexitime (the clock, default x = 49, y = 32), local_records (default x = 48, y = 26.5), admin_panel (default x = -61.3, y = -45.9),
 # dedimania (default x = 48, y = 3.7, below local_records), tmx (default x = 48, y = -18.7, below dedimania)
 #[widgets.flexitime]
 #x = 49

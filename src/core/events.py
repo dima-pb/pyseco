@@ -15,6 +15,7 @@ MAP_LIST_CHANGED = 'MapListChanged'    # None; maps.list was reloaded after maps
 PLAYLIST_CHANGED = 'PlaylistChanged'   # None; requests were added or removed, see playlist.queue
 PLAYER_FINISHED = 'PlayerFinished'     # services.race.Finish: a player crossed the finish line
 CHECKPOINT = 'Checkpoint'              # services.race.Checkpoint: a player passed a checkpoint
+ROLE_CHANGED = 'RoleChanged'           # login whose role was changed with /setrole
 SECOND_PASSED = 'SecondPassed'         # None
 
 
